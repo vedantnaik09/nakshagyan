@@ -15,6 +15,8 @@
     "@radix-ui/react-scroll-area": "^1.0.5",
     "@radix-ui/react-separator": "^1.0.3",
     "@radix-ui/react-slot": "^1.0.2",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-webgl": "^4.22.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "html2canvas": "^1.4.1",

@@ -1,10 +1,16 @@
 "use client";
 
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Droplet, Trees, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
+import * as tf from "@tensorflow/tfjs"; // Import TensorFlow.js
+import "@tensorflow/tfjs-backend-webgl"; // Import WebGL backend
+
+const MODEL_URL = "/models/model.json"; // Path to your model.json in public/models
+const TEST_IMAGE_URL = "/image.png"; // Path to the test image in public/
 
 interface SidebarProps {
   onLayerChange: (type: "water" | "forests" | "none" | "all") => void;
@@ -12,6 +18,85 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onLayerChange, currentLayer }: SidebarProps) {
+  const [loading, setLoading] = useState(false); // Manage test button state
+  const [model, setModel] = useState<tf.LayersModel | null>(null); // Store the TensorFlow model
+
+  // Set TensorFlow.js backend to WebGL
+  useEffect(() => {
+    const initializeBackend = async () => {
+      try {
+        await tf.setBackend("webgl"); // Use the WebGL backend for GPU acceleration
+        await tf.ready(); // Wait for TensorFlow.js to initialize the backend
+        console.log("TensorFlow.js is using the WebGL backend for GPU acceleration.");
+      } catch (error) {
+        console.error("Error initializing TensorFlow.js WebGL backend:", error);
+      }
+    };
+    initializeBackend();
+  }, []);
+
+  // Load the TensorFlow.js model on component mount
+  useEffect(() => {
+    const loadModel = async () => {
+      try {
+        console.log("Loading model...");
+        const loadedModel = await tf.loadLayersModel(MODEL_URL); // Use tf.loadLayersModel
+        console.log("Model loaded successfully:", loadedModel);
+        setModel(loadedModel);
+      } catch (error) {
+        console.error("Error loading TensorFlow model:", error);
+      }
+    };
+    loadModel();
+  }, []);
+
+  // Send an image to the model for inference
+  const sendToModel = async () => {
+    if (!model) {
+      console.error("Model is not loaded yet!");
+      return;
+    }
+
+    try {
+      console.log("Preparing image for model...");
+      const img = new Image();
+      img.src = TEST_IMAGE_URL;
+
+      await new Promise((resolve) => (img.onload = resolve)); // Wait for image to load
+
+      const imageTensor = tf.browser.fromPixels(img); // Convert the image to a tensor
+      console.log("Image Tensor Shape:", imageTensor.shape);
+
+      // Resize to model input shape [256, 256, 3]
+      const resizedTensor = tf.image.resizeBilinear(imageTensor, [256, 256]);
+
+      // Normalize pixel values to [0, 1]
+      const normalizedTensor = resizedTensor.div(255.0).expandDims(0); // Add batch dimension
+
+      console.log("Normalized Tensor Shape:", normalizedTensor.shape);
+
+      // Run inference
+      console.log("Running inference on the model...");
+      const predictions = model.predict(normalizedTensor) as tf.Tensor;
+      console.log("Predictions received:", predictions.dataSync()); // Log predictions
+    } catch (error) {
+      console.error("Error sending image to model:", error);
+    }
+  };
+
+  const handleTestImage = async () => {
+    console.log("Test button clicked. Sending pre-loaded image to model...");
+    try {
+      setLoading(true); // Set loading state
+      await sendToModel();
+      console.log("Test image processed successfully.");
+    } catch (error) {
+      console.error("Error testing with pre-loaded image:", error);
+    } finally {
+      setLoading(false); // Reset loading state
+    }
+  };
+
   const layers = [
     {
       id: "water",
@@ -64,6 +149,17 @@ export function Sidebar({ onLayerChange, currentLayer }: SidebarProps) {
               </Button>
             </div>
           </ScrollArea>
+        </div>
+
+        <div className="px-3 py-2">
+          <h2 className="mb-2 px-4 text-lg font-semibold">Actions</h2>
+          <Button
+            onClick={handleTestImage}
+            className="w-full bg-primary text-primary-foreground"
+            disabled={loading} // Disable the button while loading
+          >
+            {loading ? "Processing..." : "Test Pre-loaded Image"}
+          </Button>
         </div>
       </div>
     </div>
