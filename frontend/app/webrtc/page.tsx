@@ -41,11 +41,50 @@ const Page = () => {
 
   const [pcs, setPcs] = useState<RTCPeerConnection[]>([]);
   const [myIndex, setMyIndex] = useState<number>();
+  const [chatIndex, setChatIndex] = useState<number>();
   const [nameList, setNameList] = useState<string[]>();
 
   const [beforeCall, setBeforeCall] = useState(0);
   const [afterCall, setAfterCall] = useState(0);
   const [callLeft, setCallLeft] = useState(0);
+
+  const setupPeerConnection = (pc: RTCPeerConnection) => {
+    // Create data channel
+    const dataChannel = pc.createDataChannel("messageChannel");
+    setupDataChannel(dataChannel);
+    setDataChannels(prev => [...prev, dataChannel]);
+
+    // Handle incoming data channels as well
+    pc.ondatachannel = (event) => {
+      const incomingChannel = event.channel;
+      setupDataChannel(incomingChannel);
+      setDataChannels(prev => [...prev, incomingChannel]);
+    };
+
+    return pc;
+  };
+
+  const setupDataChannel = (dataChannel: RTCDataChannel) => {
+    console.log("setup data channel")
+    dataChannel.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      setMessages(prev => [...prev, message]);
+      console.log(messages)
+    };
+
+    dataChannel.onopen = () => {
+      console.log("Data channel is open");
+    };
+
+    dataChannel.onclose = () => {
+      console.log("Data channel is closed");
+      setDataChannels(prev => prev.filter(dc => dc !== dataChannel));
+    };
+
+    dataChannel.onerror = (error) => {
+      console.error("Data Channel Error:", error);
+    };
+  };
 
   const generateShortId = () => {
     const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -89,9 +128,9 @@ const Page = () => {
 
     const myIndex = 1;
     setMyIndex(myIndex);
+    setChatIndex(1)
     setIsHost(true);
     let pc: RTCPeerConnection;
-
     indexOfOtherConnectedCandidates.onSnapshot(async (doc) => {
       if (doc.exists) {
         //Check for any newly addded users
@@ -118,6 +157,7 @@ const Page = () => {
               const signal = data?.signal;
               if (signal === 0) {
                 pc = new RTCPeerConnection(servers);
+                pc = setupPeerConnection(pc);
                 candidateNameDoc = callDoc.collection("otherCandidates").doc(`candidate${newAddedUser}${myIndex}`);
                 candidateNameDoc.set({ myName: "Moderator", joiner: "" });
 
@@ -209,17 +249,20 @@ const Page = () => {
     }
     const callDocHost = firestore.collection("calls").doc(callId);
     const lengthUsers = (await callDocHost.get()).data()?.connectedUsers;
-    let indexOfOtherConnectedCandidates = callDocHost.collection("otherCandidates").doc(`indexOfConnectedCandidates`);
+    let indexOfOtherConnectedCandidates = await callDocHost.collection("otherCandidates").doc(`indexOfConnectedCandidates`);
 
     const myIndex = lengthUsers + 1;
     setMyIndex(lengthUsers);
+    setChatIndex(lengthUsers+1)
+    console.log("MY INDEX IS ",myIndex)
     await callDocHost.update({ connectedUsers: myIndex });
 
-    indexOfOtherConnectedCandidates.update({
+    await indexOfOtherConnectedCandidates.update({
       indexOfCurrentUsers: firebase.firestore.FieldValue.arrayUnion(myIndex),
     });
 
     let pc: RTCPeerConnection;
+    console.log("Index of other", indexOfOtherConnectedCandidates.get())
 
     indexOfOtherConnectedCandidates.onSnapshot(async (doc) => {
       if (doc.exists) {
@@ -249,6 +292,7 @@ const Page = () => {
               const signal = data?.signal;
               if (signal === 0) {
                 pc = new RTCPeerConnection(servers);
+                pc = setupPeerConnection(pc);
                 candidateNameDoc = callDocHost.collection("otherCandidates").doc(`candidate${newAddedUser}${myIndex}`);
                 offerCandidatesCollection = callDocHost.collection("otherCandidates").doc(`candidate${newAddedUser}${myIndex}`).collection("offerCandidates");
                 answerCandidatesCollection = callDocHost.collection("otherCandidates").doc(`candidate${newAddedUser}${myIndex}`).collection("answerCandidates");
@@ -335,6 +379,7 @@ const Page = () => {
 
           if (signal === 1) {
             pc = new RTCPeerConnection(servers);
+            pc = setupPeerConnection(pc);
             offerAnswerPairs = callDocHost.collection("otherCandidates").doc(`offerAnswerPairs${myIndex}${existingCaller}`);
             console.log(`pair is ${myIndex}${existingCaller}`);
             candidateNameDoc.update({ joiner: "Moderator" });
@@ -417,7 +462,30 @@ const Page = () => {
     if (answerButtonRef.current) answerButtonRef.current.disabled = true;
   };
 
-  
+  const sendMessage = () => {
+    if (!messageText.trim()) return;
+
+    const message: Message = {
+      text: messageText,
+      sender: chatIndex || 0,
+      timestamp: new Date(),
+    };
+
+    // Send message through all open data channels
+    dataChannels.forEach(channel => {
+      if (channel.readyState === "open") {
+        try {
+          channel.send(JSON.stringify(message));
+        } catch (error) {
+          console.error("Error sending message:", error);
+        }
+      }
+    });
+
+    // Add own message to messages
+    setMessages(prev => [...prev, message]);
+    setMessageText("");
+  };
 
   useEffect(() => {
     if (callButtonRef.current) {
@@ -429,6 +497,13 @@ const Page = () => {
   }, []);
 
   const hangup = async () => {
+    // Close all data channels
+    dataChannels.forEach(channel => {
+      channel.close();
+    });
+    setDataChannels([]);
+
+    // ... (rest of your existing hangup code)
     console.log("The current pcs are: ", pcs);
     console.log(myIndex);
     const callDoc = firestore.collection("calls").doc(callId);
@@ -440,7 +515,6 @@ const Page = () => {
     });
     setPcs([]);
   };
-
   
 
   useEffect(() => {
@@ -500,13 +574,13 @@ const Page = () => {
         if (id) {
           setCallId(id);
           if (callInputRef.current) {
-            callInputRef.current.value = id;
+           callInputRef.current.value = id;
           }
           handleAnswerButtonClick();
         } else {
           handleCallButtonClick();
+          console.log("Initiated")
         }
-
         setIsClient(true); // Indicate that the client is set up
       }
     };
@@ -541,9 +615,49 @@ const Page = () => {
 
   return (
     <div className="mx-auto p-5 w-full">
-      <h2 className="text-2xl font-semibold my-4">Web-RTC</h2>
-
-    </div>
+    <h2 className="text-2xl font-semibold my-4">Web-RTC</h2>
+    
+    {/* Keep your existing UI elements */}
+    
+    {/* Add messaging UI */}
+    {inCall && (
+      <div className="mt-8">
+        {chatIndex}
+        <div className="border rounded-lg p-4 h-64 overflow-y-auto mb-4">
+          {messages.map((message, index) => (
+            <div
+              key={index}
+              className={`mb-2 ${message.sender === chatIndex ? 'text-right' : 'text-left'}`}
+            >
+              <span className={`inline-block rounded-lg px-3 py-2 bg-blue-500 text-white`}>
+                <span className="text-sm opacity-75">User {message.sender}</span>
+                <p>{message.text}</p>
+                <span className="text-xs opacity-75">
+                  {new Date(message.timestamp).toLocaleTimeString()}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+            placeholder="Type your message..."
+            className="flex-1 border rounded-lg px-3 py-2"
+          />
+          <button
+            onClick={sendMessage}
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
   );
 };
 
