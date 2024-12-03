@@ -1,7 +1,7 @@
 'use client'
 import dynamic from 'next/dynamic';
 
-const MapComponent = dynamic(() => import('@/components/map/'), {
+const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
   loading: () => (
     <div className="flex h-screen items-center justify-center">
