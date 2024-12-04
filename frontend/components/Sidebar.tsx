@@ -15,9 +15,18 @@ const TEST_IMAGE_URL = "/image.png"; // Path to the test image in public/
 interface SidebarProps {
   onLayerChange: (type: "water" | "forests" | "none" | "all") => void;
   currentLayer: "water" | "forests" | "none" | "all";
+  handleSetWMSURL: (url: string) => void;
+  availableLayers: string[];
+  handleWMSLayerChange: (layer: string) => void;
 }
 
-export function Sidebar({ onLayerChange, currentLayer }: SidebarProps) {
+export function Sidebar({
+  onLayerChange,
+  currentLayer,
+  handleSetWMSURL,
+  availableLayers,
+  handleWMSLayerChange,
+}: SidebarProps) {
   const [loading, setLoading] = useState(false); // Manage test button state
   const [model, setModel] = useState<tf.LayersModel | null>(null); // Store the TensorFlow model
 
@@ -27,7 +36,9 @@ export function Sidebar({ onLayerChange, currentLayer }: SidebarProps) {
       try {
         await tf.setBackend("webgl"); // Use the WebGL backend for GPU acceleration
         await tf.ready(); // Wait for TensorFlow.js to initialize the backend
-        console.log("TensorFlow.js is using the WebGL backend for GPU acceleration.");
+        console.log(
+          "TensorFlow.js is using the WebGL backend for GPU acceleration."
+        );
       } catch (error) {
         console.error("Error initializing TensorFlow.js WebGL backend:", error);
       }
@@ -132,7 +143,8 @@ export function Sidebar({ onLayerChange, currentLayer }: SidebarProps) {
                   variant={currentLayer === layer.id ? "default" : "ghost"}
                   className={cn(
                     "w-full justify-start gap-2",
-                    currentLayer === layer.id && "bg-primary text-primary-foreground"
+                    currentLayer === layer.id &&
+                      "bg-primary text-primary-foreground"
                   )}
                 >
                   <layer.icon className="h-4 w-4" />
@@ -150,7 +162,36 @@ export function Sidebar({ onLayerChange, currentLayer }: SidebarProps) {
             </div>
           </ScrollArea>
         </div>
-
+        <div className="px-3 py-2">
+          <h2 className="mb-2 px-4 text-lg font-semibold">Set WMS URL</h2>
+          <div className="flex flex-col gap-2">
+            <input
+              type="text"
+              placeholder="Paste WMS URL here..."
+              className="border rounded-md p-2"
+              onChange={(e) => handleSetWMSURL(e.target.value)} // Pass URL to the handler
+            />
+          </div>
+        </div>
+        <div className="px-3 py-2">
+          <h2 className="text-lg font-bold">Available Layers</h2>
+          {availableLayers.length > 0 ? (
+            <ul>
+              {availableLayers.map((layer, index) => (
+                <li key={index} className="py-1">
+                  <button
+                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    onClick={() => handleWMSLayerChange(layer)}
+                  >
+                    {layer}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No layers available or loading...</p>
+          )}
+        </div>
         <div className="px-3 py-2">
           <h2 className="mb-2 px-4 text-lg font-semibold">Actions</h2>
           <Button
