@@ -17,6 +17,7 @@ const Map: React.FC = () => {
     "https://ows.terrestris.de/osm/service?"
   );
   const [wmsLayer, setWMSLayer] = useState<string>("OSM-WMS");
+  const [satelliteLayer, setSatelliteLayer] = useState<string>("OSM-WMS");
   const [layers, setLayers] = useState<string[]>([]);
   const [rectangleToolActive, setRectangleToolActive] = useState<boolean>(false);
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -82,18 +83,57 @@ const Map: React.FC = () => {
     });
     dragBoxRef.current = dragBox;
 
-    dragBox.on("boxend", () => {
+    dragBox.on("boxend", async () => {
       const boxExtent = dragBox.getGeometry().getExtent();
-
-      // Transform from EPSG:3857 to EPSG:4326
-      const transformedExtent = transformExtent(
-        boxExtent,
-        "EPSG:3857",
-        "EPSG:4326"
-      );
-
+    
+      // Transform extent from EPSG:3857 to EPSG:4326
+      const transformedExtent = transformExtent(boxExtent, "EPSG:3857", "EPSG:4326");
+    
       console.log("Rectangle coordinates (lat/lon):", transformedExtent);
+    
+      const [minX, minY, maxX, maxY] = transformedExtent;
+    
+      // Adjust width and height to match bounding box aspect ratio
+      const width = 512;
+      const height = 512;
+    
+      const params = new URLSearchParams({
+        service: "WMS",
+        version: "1.1.1",
+        request: "GetMap",
+        layers: satelliteLayer,
+        styles: "", // Optional, may depend on WMS server
+        bbox: `${minX},${minY},${maxX},${maxY}`,
+        width: width.toString(),
+        height: height.toString(),
+        srs: "EPSG:4326",
+        format: "image/png",
+        transparent: "true",
+      });
+    
+      const tileURL = `${wmsURL}&${params.toString()}`;
+      console.log("Fetching tile from:", tileURL);
+    
+      try {
+        const response = await fetch(tileURL);
+        if (!response.ok) throw new Error(`Failed to fetch tile image: ${response.statusText}`);
+    
+        const blob = await response.blob();
+        const objectURL = URL.createObjectURL(blob);
+    
+        // Download the image
+        const link = document.createElement("a");
+        link.href = objectURL;
+        link.download = "tile.png";
+        link.click();
+        URL.revokeObjectURL(objectURL);
+    
+        console.log("Tile saved successfully.");
+      } catch (error) {
+        console.error("Error fetching tile:", error);
+      }
     });
+    
 
     dragBox.on("boxstart", () => {
       console.log("Drawing a new rectangle...");
@@ -127,6 +167,10 @@ const Map: React.FC = () => {
     window.alert(`Setting WMS layer to: ${layer}`);
     setWMSLayer(layer);
   };
+  const handleSatelliteLayerChange = (layer: string) => {
+    window.alert(`Setting WMS layer to: ${layer}`);
+    setSatelliteLayer(layer);
+  };
 
   return (
     <div className="flex h-full w-full">
@@ -139,6 +183,7 @@ const Map: React.FC = () => {
         }}
         availableLayers={layers}
         handleWMSLayerChange={handleWMSLayerChange}
+        handleSatelliteLayerChange={handleSatelliteLayerChange}
       />
       <div className="w-full min-h-full relative">
         <button
