@@ -1,5 +1,7 @@
 'use client'
 import dynamic from 'next/dynamic';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -12,7 +14,8 @@ const MapComponent = dynamic(() => import('@/components/Map'), {
 
 export default function MapPage() {
   return (
-    <main className="flex min-h-screen flex-col">
+    <main className="flex h-full w-full flex-col">
+      <ToastContainer />
       <MapComponent />
     </main>
   );

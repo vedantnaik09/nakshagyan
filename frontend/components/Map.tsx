@@ -1,24 +1,33 @@
 import React, { useEffect, useRef, useState } from "react";
+import { toast } from "react-toastify";
 import { Map as OlMap, View } from "ol";
 import TileLayer from "ol/layer/Tile";
-import { fromLonLat } from "ol/proj";
 import TileWMS from "ol/source/TileWMS";
+import { DragBox } from "ol/interaction";
+import { platformModifierKeyOnly } from "ol/events/condition";
 import "ol/ol.css";
-
+import { PiRectangleDashed } from "react-icons/pi";
 import { Sidebar } from "./Sidebar";
+import {reducePrecision, epsg4326toEpsg3857,  epsg3875toEpsg4326} from "../lib/utils";
 
 const Map: React.FC = () => {
   const [wmsURL, setWMSURL] = useState<string>(
-    "https://ows.terrestris.de/osm/service?"
+    `https://services.sentinel-hub.com/ogc/wms/${process.env.NEXT_PUBLIC_SENTINEL_INSTANCE_ID}`
   );
-  const [wmsLayer, setWMSLayer] = useState<string>("OSM-WMS");
-  const [layers, setLayers] = useState<string[]>([]); 
+  const [wmsLayer, setWMSLayer] = useState<string>("1_TRUE-COLOR-L1C");
+  const [satelliteLayer, setSatelliteLayer] =
+    useState<string>("1_TRUE-COLOR-L1C");
+  const satelliteLayerRef = useRef<string>("1_TRUE-COLOR-L1C");
+  const [layers, setLayers] = useState<string[]>([]);
+  const [rectangleToolActive, setRectangleToolActive] =
+    useState<boolean>(false);
   const mapRef = useRef<HTMLDivElement | null>(null);
+  const dragBoxRef = useRef<DragBox | null>(null);
 
   const fetchCapabilities = async (url: string) => {
     try {
       const response = await fetch(
-        `${url}?service=WMS&request=GetCapabilities`
+        `${url}?SERVICE=WMS&REQUEST=GetCapabilities`
       );
       const text = await response.text();
       const parser = new DOMParser();
@@ -46,7 +55,16 @@ const Map: React.FC = () => {
   }, [wmsURL]);
 
   useEffect(() => {
+    satelliteLayerRef.current = satelliteLayer; // Update ref whenever satelliteLayer changes
+    console.log("Satellite Layer updated:", satelliteLayer);
+  }, [satelliteLayer]);
+
+  useEffect(() => {
     if (!mapRef.current) return;
+
+    const maxResolution = 200;
+
+    // Initialize OpenLayers map
     const map = new OlMap({
       target: mapRef.current!,
       layers: [
@@ -57,29 +75,153 @@ const Map: React.FC = () => {
               LAYERS: wmsLayer,
               FORMAT: "image/png",
               TRANSPARENT: true,
+              VERSION: "1.3.0",
             },
             serverType: "geoserver",
           }),
         }),
       ],
       view: new View({
-        center: fromLonLat([0, 0]),
-        zoom: 2,
+        center: epsg4326toEpsg3857([23, 25]), // Initial center of the map
+        zoom: 1, // Start with a zoom level under 200 m/pixel
+        minZoom: 0, // Minimum zoom level
+        maxZoom: 200, // Maximum zoom level
+        maxResolution: maxResolution, // Limit resolution to below 200 m/pixel
       }),
     });
+
+    map.getView().on("change:resolution", () => {
+      const resolution = map.getView().getResolution();
+    });
+
+    const dragBox = new DragBox({
+      condition: platformModifierKeyOnly,
+    });
+    dragBoxRef.current = dragBox;
+
+    dragBox.on("boxend", async () => {
+      const boxExtent = dragBox.getGeometry().getExtent();
+
+      const projection = map.getView().getProjection(); // Get map projection
+
+      // Check if the bounding box is already in EPSG:3857 or EPSG:3875
+      const isEpsg3875 = projection.getCode() === "EPSG:3875";
+      const isEpsg3857 = projection.getCode() === "EPSG:3857";
+
+      const [minX, minY, maxX, maxY] = boxExtent;
+      // Declare minXY and maxXY as tuples
+      let minXY: any, maxXY: any;
+
+      if (isEpsg3875) {
+        // Convert from EPSG:3875 to EPSG:4326
+        minXY = epsg3875toEpsg4326([minX, minY]);
+        maxXY = epsg3875toEpsg4326([maxX, maxY]);
+      } else if (isEpsg3857) {
+        // If already in EPSG:3857, use as-is
+        minXY = [minX, minY];
+        maxXY = [maxX, maxY];
+      } else {
+        // If in EPSG:4326, convert to EPSG:3857
+        minXY = epsg4326toEpsg3857([minX, minY]);
+        maxXY = epsg4326toEpsg3857([maxX, maxY]);
+      }
+
+      const minXYReduced = reducePrecision(minXY);
+      const maxXYReduced = reducePrecision(maxXY);
+      // Check if any of the coordinates are invalid (NaN)
+      if (
+        isNaN(minXYReduced[0]) ||
+        isNaN(minXYReduced[1]) ||
+        isNaN(maxXYReduced[0]) ||
+        isNaN(maxXYReduced[1])
+      ) {
+        console.error(
+          "Invalid coordinates after conversion. Skipping WMS request."
+        );
+        return; // Skip the WMS request if coordinates are invalid
+      }
+
+      // Prepare the WMS request
+      const width = 512;
+      const height = 512;
+
+      const params = new URLSearchParams({
+        SERVICE: "WMS",
+        VERSION: "1.3.0",
+        REQUEST: "GetMap",
+        LAYERS: satelliteLayerRef.current, // Use the ref for the current layer
+        STYLES: "",
+        BBOX: `${minXYReduced[0]},${minXYReduced[1]},${maxXYReduced[0]},${maxXYReduced[1]}`, // Correct BBOX in EPSG:3857
+        WIDTH: width.toString(),
+        HEIGHT: height.toString(),
+        CRS: "EPSG:3857", // Ensure correct CRS
+        FORMAT: "image/png",
+        TRANSPARENT: "true",
+      });
+
+      const tileURL = `${wmsURL}?${params.toString()}`;
+
+      try {
+        const response = await fetch(tileURL);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch tile image: ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        const objectURL = URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.href = objectURL;
+        link.download = "tile.png";
+        link.click();
+        URL.revokeObjectURL(objectURL);
+
+        console.log("Tile saved successfully.");
+      } catch (error) {
+        console.error("Error fetching tile:", error);
+      }
+    });
+
+    dragBox.on("boxstart", () => {
+      console.log("Drawing a new rectangle...");
+    });
+
+    map.addInteraction(dragBox);
+    dragBox.setActive(false);
 
     return () => {
       map.setTarget(undefined);
     };
   }, [wmsURL, wmsLayer]);
 
-  const handleWMSLayerChange = (layer: string) => { 
+  const toggleRectangleTool = () => {
+    if (dragBoxRef.current) {
+      const isActive = !rectangleToolActive;
+      dragBoxRef.current.setActive(isActive);
+      setRectangleToolActive(isActive);
+    }
+    if (!rectangleToolActive) {
+      toast.success("Use Ctrl+Drag to select an area", {
+        theme: "dark",
+        icon: false,
+        hideProgressBar: true,
+        autoClose: 1500,
+      });
+    }
+  };
+
+  const handleWMSLayerChange = (layer: string) => {
     window.alert(`Setting WMS layer to: ${layer}`);
     setWMSLayer(layer);
-  }
+  };
+
+  const handleSatelliteLayerChange = (layer: string) => {
+    window.alert(`Setting Satellite layer to: ${layer}`);
+    setSatelliteLayer(layer);
+  };
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-full w-full">
       <Sidebar
         onLayerChange={(type) => console.log(`Layer changed to: ${type}`)}
         currentLayer="none"
@@ -89,8 +231,19 @@ const Map: React.FC = () => {
         }}
         availableLayers={layers}
         handleWMSLayerChange={handleWMSLayerChange}
+        handleSatelliteLayerChange={handleSatelliteLayerChange}
       />
-      <div ref={mapRef} className="w-3/4 h-full"></div>
+      <div className="w-full min-h-full relative">
+        <button
+          className={`absolute mx-auto my-2 top-2 left-0 right-0 w-fit p-2 z-10 rounded ${
+            rectangleToolActive ? "bg-black " : "bg-black bg-opacity-50"
+          }`}
+          onClick={toggleRectangleTool}
+        >
+          <PiRectangleDashed size={22} />
+        </button>
+        <div ref={mapRef} className="w-full h-full"></div>
+      </div>
     </div>
   );
 };
