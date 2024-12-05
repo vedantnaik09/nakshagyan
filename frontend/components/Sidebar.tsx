@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Droplet, Trees, Layers, Globe2, Satellite } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,6 +30,8 @@ export function Sidebar({
 }: SidebarProps) {
   const [loading, setLoading] = useState(false);
   const [model, setModel] = useState<tf.LayersModel | null>(null);
+  const [activeWMSLayer, setActiveWMSLayer] = useState<string | null>(null);
+  const [activeSatelliteLayer, setActiveSatelliteLayer] = useState<string | null>(null);
 
   useEffect(() => {
     const initializeBackend = async () => {
@@ -142,7 +143,7 @@ export function Sidebar({
                   <layer.icon
                     className={cn(
                       "h-4 w-4",
-                      currentLayer === layer.id && "text-primary"
+                      currentLayer === layer.id && "border-2 border-red-500 rounded"
                     )}
                   />
                   {layer.name}
@@ -186,18 +187,28 @@ export function Sidebar({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleWMSLayerChange(layer)}
+                        onClick={() => {
+                          setActiveWMSLayer(layer);
+                          handleWMSLayerChange(layer);
+                        }}
                         title="Set layer to view"
                       >
-                        <Globe2 className="h-4 w-4" />
+                        <Globe2 color={`${activeWMSLayer === layer ? 'green':'white'}`}
+                        className="h-4 w-4"
+                        />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleSatelliteLayerChange(layer)}
+                        onClick={() => {
+                          setActiveSatelliteLayer(layer);
+                          handleSatelliteLayerChange(layer);
+                        }}
                         title="Set layer for satellite segmentation"
                       >
-                        <Satellite className="h-4 w-4" />
+                        <Satellite color={`${activeSatelliteLayer === layer ? 'green':'white'}`}
+                          className="h-4 w-4"
+                        />
                       </Button>
                     </div>
                   </div>

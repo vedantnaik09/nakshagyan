@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { toast } from 'react-toastify';
+import { toast } from "react-toastify";
 import { Map as OlMap, View } from "ol";
 import TileLayer from "ol/layer/Tile";
 import { fromLonLat } from "ol/proj";
@@ -18,6 +18,7 @@ const Map: React.FC = () => {
   );
   const [wmsLayer, setWMSLayer] = useState<string>("OSM-WMS");
   const [satelliteLayer, setSatelliteLayer] = useState<string>("OSM-WMS");
+  const satelliteLayerRef = useRef<string>("OSM-WMS"); // Ref for satelliteLayer
   const [layers, setLayers] = useState<string[]>([]);
   const [rectangleToolActive, setRectangleToolActive] = useState<boolean>(false);
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -54,6 +55,11 @@ const Map: React.FC = () => {
   }, [wmsURL]);
 
   useEffect(() => {
+    satelliteLayerRef.current = satelliteLayer; // Update ref whenever satelliteLayer changes
+    console.log("Satellite Layer updated:", satelliteLayer);
+  }, [satelliteLayer]);
+
+  useEffect(() => {
     if (!mapRef.current) return;
 
     const map = new OlMap({
@@ -77,7 +83,6 @@ const Map: React.FC = () => {
       }),
     });
 
-    // Initialize DragBox interaction
     const dragBox = new DragBox({
       condition: platformModifierKeyOnly,
     });
@@ -85,24 +90,20 @@ const Map: React.FC = () => {
 
     dragBox.on("boxend", async () => {
       const boxExtent = dragBox.getGeometry().getExtent();
-    
-      // Transform extent from EPSG:3857 to EPSG:4326
       const transformedExtent = transformExtent(boxExtent, "EPSG:3857", "EPSG:4326");
-    
-      console.log("Rectangle coordinates (lat/lon):", transformedExtent);
-    
       const [minX, minY, maxX, maxY] = transformedExtent;
-    
-      // Adjust width and height to match bounding box aspect ratio
+
       const width = 512;
       const height = 512;
-    
+
+      console.log("Using Satellite Layer:", satelliteLayerRef.current); // Use ref for current value
+
       const params = new URLSearchParams({
         service: "WMS",
         version: "1.1.1",
         request: "GetMap",
-        layers: satelliteLayer,
-        styles: "", // Optional, may depend on WMS server
+        layers: satelliteLayerRef.current, // Use the ref here
+        styles: "",
         bbox: `${minX},${minY},${maxX},${maxY}`,
         width: width.toString(),
         height: height.toString(),
@@ -110,37 +111,35 @@ const Map: React.FC = () => {
         format: "image/png",
         transparent: "true",
       });
-    
+
       const tileURL = `${wmsURL}&${params.toString()}`;
       console.log("Fetching tile from:", tileURL);
-    
+
       try {
         const response = await fetch(tileURL);
         if (!response.ok) throw new Error(`Failed to fetch tile image: ${response.statusText}`);
-    
+
         const blob = await response.blob();
         const objectURL = URL.createObjectURL(blob);
-    
-        // Download the image
+
         const link = document.createElement("a");
         link.href = objectURL;
         link.download = "tile.png";
         link.click();
         URL.revokeObjectURL(objectURL);
-    
+
         console.log("Tile saved successfully.");
       } catch (error) {
         console.error("Error fetching tile:", error);
       }
     });
-    
 
     dragBox.on("boxstart", () => {
       console.log("Drawing a new rectangle...");
     });
 
     map.addInteraction(dragBox);
-    dragBox.setActive(false); // Start with the tool disabled
+    dragBox.setActive(false);
 
     return () => {
       map.setTarget(undefined);
@@ -153,7 +152,7 @@ const Map: React.FC = () => {
       dragBoxRef.current.setActive(isActive);
       setRectangleToolActive(isActive);
     }
-    if(!rectangleToolActive){
+    if (!rectangleToolActive) {
       toast.success("Use Ctrl+Drag to select an area", {
         theme: "dark",
         icon: false,
@@ -167,8 +166,9 @@ const Map: React.FC = () => {
     window.alert(`Setting WMS layer to: ${layer}`);
     setWMSLayer(layer);
   };
+
   const handleSatelliteLayerChange = (layer: string) => {
-    window.alert(`Setting WMS layer to: ${layer}`);
+    window.alert(`Setting Satellite layer to: ${layer}`);
     setSatelliteLayer(layer);
   };
 
@@ -192,7 +192,7 @@ const Map: React.FC = () => {
           }`}
           onClick={toggleRectangleTool}
         >
-          <PiRectangleDashed size={22}/>
+          <PiRectangleDashed size={22} />
         </button>
         <div ref={mapRef} className="w-full h-full"></div>
       </div>
