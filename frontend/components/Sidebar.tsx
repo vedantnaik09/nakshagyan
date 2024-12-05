@@ -130,7 +130,7 @@ export function Sidebar({
   ] as const;
 
   return (
-    <div className="pb-12 w-64">
+    <div className="pb-12 w-96 max-h-[100vh] overflow-y-auto">
       <div className="space-y-4 py-4">
         <div className="px-3 py-2">
           <h2 className="mb-2 px-4 text-lg font-semibold">Layers</h2>
