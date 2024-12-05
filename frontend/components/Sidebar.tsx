@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import * as tf from "@tensorflow/tfjs"; // Import TensorFlow.js
 import "@tensorflow/tfjs-backend-webgl"; // Import WebGL backend
 
-const MODEL_URL = "/models/model.json"; // Path to your model.json in public/models
+const MODEL_URL = "/models/39epochs_g.onnx"; // Path to your model.json in public/models
 const TEST_IMAGE_URL = "/image.png"; // Path to the test image in public/
 
 interface SidebarProps {
