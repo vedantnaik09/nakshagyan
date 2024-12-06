@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 import * as tf from "@tensorflow/tfjs";
 import "@tensorflow/tfjs-backend-webgl";
 
-const MODEL_URL = "/models/39epochs_g.onnx"; // Path to your model.json in public/models
-const TEST_IMAGE_URL = "/image.png"; // Path to the test image in public/
+const MODEL_URL = "/models/39epochs_g.onnx";
+const TEST_IMAGE_URL = "/image.png";
 
 interface SidebarProps {
   onLayerChange: (type: "water" | "forests" | "none" | "all") => void;
@@ -31,14 +31,18 @@ export function Sidebar({
   const [loading, setLoading] = useState(false);
   const [model, setModel] = useState<tf.LayersModel | null>(null);
   const [activeWMSLayer, setActiveWMSLayer] = useState<string | null>(null);
-  const [activeSatelliteLayer, setActiveSatelliteLayer] = useState<string | null>(null);
+  const [activeSatelliteLayer, setActiveSatelliteLayer] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     const initializeBackend = async () => {
       try {
         await tf.setBackend("webgl");
         await tf.ready();
-        console.log("TensorFlow.js is using the WebGL backend for GPU acceleration.");
+        console.log(
+          "TensorFlow.js is using the WebGL backend for GPU acceleration."
+        );
       } catch (error) {
         console.error("Error initializing TensorFlow.js WebGL backend:", error);
       }
@@ -136,14 +140,16 @@ export function Sidebar({
                   variant={currentLayer === layer.id ? "default" : "ghost"}
                   className={cn(
                     "w-full justify-start gap-2",
-                    currentLayer === layer.id && "bg-primary text-primary-foreground"
+                    currentLayer === layer.id &&
+                      "bg-primary text-primary-foreground"
                   )}
                   title={`Activate ${layer.description}`}
                 >
                   <layer.icon
                     className={cn(
                       "h-4 w-4",
-                      currentLayer === layer.id && "border-2 border-red-500 rounded"
+                      currentLayer === layer.id &&
+                        "border-2 border-red-500 rounded"
                     )}
                   />
                   {layer.name}
@@ -176,7 +182,9 @@ export function Sidebar({
           <div>
             <h2 className="text-lg font-semibold mb-2">Available Layers</h2>
             {availableLayers.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-2 h-72 overflow-y-scroll">
+                {" "}
+                {/* Added height and scrolling */}
                 {availableLayers.map((layer, index) => (
                   <div
                     key={index}
@@ -193,8 +201,11 @@ export function Sidebar({
                         }}
                         title="Set layer to view"
                       >
-                        <Globe2 color={`${activeWMSLayer === layer ? 'green':'white'}`}
-                        className="h-4 w-4"
+                        <Globe2
+                          color={`${
+                            activeWMSLayer === layer ? "green" : "white"
+                          }`}
+                          className="h-4 w-4"
                         />
                       </Button>
                       <Button
@@ -206,7 +217,10 @@ export function Sidebar({
                         }}
                         title="Set layer for satellite segmentation"
                       >
-                        <Satellite color={`${activeSatelliteLayer === layer ? 'green':'white'}`}
+                        <Satellite
+                          color={`${
+                            activeSatelliteLayer === layer ? "green" : "white"
+                          }`}
                           className="h-4 w-4"
                         />
                       </Button>
