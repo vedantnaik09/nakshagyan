@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 
 export async function connect() {
     try {
+        console.log('Connecting to MongoDB...');
+        console.log(process.env.MONGO_URI);
         mongoose.connect(process.env.MONGO_URI!);
         const connection = mongoose.connection;
 
@@ -17,7 +19,6 @@ export async function connect() {
     } catch (error) {
         console.log('Something goes wrong!');
         console.log(error);
-
     }
 
 
