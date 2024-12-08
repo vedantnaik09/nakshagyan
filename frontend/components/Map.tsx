@@ -4,12 +4,10 @@ import { Map as OlMap, View } from "ol";
 import TileLayer from "ol/layer/Tile";
 import { fromLonLat } from "ol/proj";
 import TileWMS from "ol/source/TileWMS";
-import { DragBox } from "ol/interaction";
 import { platformModifierKeyOnly } from "ol/events/condition";
 import { transformExtent } from "ol/proj";
 import "ol/ol.css";
 import { PiRectangleDashed } from "react-icons/pi";
-
 import { Sidebar } from "./Sidebar";
 
 const Map: React.FC = () => {
@@ -18,17 +16,23 @@ const Map: React.FC = () => {
   );
   const [wmsLayer, setWMSLayer] = useState<string>("OSM-WMS");
   const [satelliteLayer, setSatelliteLayer] = useState<string>("OSM-WMS");
-  const satelliteLayerRef = useRef<string>("OSM-WMS"); // Ref for satelliteLayer
+  const satelliteLayerRef = useRef<string>("OSM-WMS"); 
   const [layers, setLayers] = useState<string[]>([]);
   const [rectangleToolActive, setRectangleToolActive] = useState<boolean>(false);
+
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const dragBoxRef = useRef<DragBox | null>(null);
+  const mapObjRef = useRef<OlMap | null>(null);
+
+  // For custom selection
+  const [isDrawing, setIsDrawing] = useState<boolean>(false);
+  const [startPixel, setStartPixel] = useState<[number, number] | null>(null);
+  const [currentPixel, setCurrentPixel] = useState<[number, number] | null>(null);
+
+  const selectionBoxRef = useRef<HTMLDivElement | null>(null);
 
   const fetchCapabilities = async (url: string) => {
     try {
-      const response = await fetch(
-        `${url}?service=WMS&request=GetCapabilities`
-      );
+      const response = await fetch(`${url}?service=WMS&request=GetCapabilities`);
       const text = await response.text();
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(text, "application/xml");
@@ -55,8 +59,7 @@ const Map: React.FC = () => {
   }, [wmsURL]);
 
   useEffect(() => {
-    satelliteLayerRef.current = satelliteLayer; // Update ref whenever satelliteLayer changes
-    console.log("Satellite Layer updated:", satelliteLayer);
+    satelliteLayerRef.current = satelliteLayer;
   }, [satelliteLayer]);
 
   useEffect(() => {
@@ -83,63 +86,7 @@ const Map: React.FC = () => {
       }),
     });
 
-    const dragBox = new DragBox({
-      condition: platformModifierKeyOnly,
-    });
-    dragBoxRef.current = dragBox;
-
-    dragBox.on("boxend", async () => {
-      const boxExtent = dragBox.getGeometry().getExtent();
-      const transformedExtent = transformExtent(boxExtent, "EPSG:3857", "EPSG:4326");
-      const [minX, minY, maxX, maxY] = transformedExtent;
-
-      const width = 512;
-      const height = 512;
-
-      console.log("Using Satellite Layer:", satelliteLayerRef.current); // Use ref for current value
-
-      const params = new URLSearchParams({
-        service: "WMS",
-        version: "1.1.1",
-        request: "GetMap",
-        layers: satelliteLayerRef.current, // Use the ref here
-        styles: "",
-        bbox: `${minX},${minY},${maxX},${maxY}`,
-        width: width.toString(),
-        height: height.toString(),
-        srs: "EPSG:4326",
-        format: "image/png",
-        transparent: "true",
-      });
-
-      const tileURL = `${wmsURL}&${params.toString()}`;
-      console.log("Fetching tile from:", tileURL);
-
-      try {
-        const response = await fetch(tileURL);
-        if (!response.ok) throw new Error(`Failed to fetch tile image: ${response.statusText}`);
-
-        const blob = await response.blob();
-        const objectURL = URL.createObjectURL(blob);
-
-        const link = document.createElement("a");
-        link.href = objectURL;
-        link.download = "tile.png";
-        link.click();
-        URL.revokeObjectURL(objectURL);
-
-        console.log("Tile saved successfully.");
-      } catch (error) {
-        console.error("Error fetching tile:", error);
-      }
-    });
-
-    dragBox.on("boxstart", () => {
-      console.log("Drawing a new rectangle...");
-    });
-
-    map.addInteraction(dragBox);
-    dragBox.setActive(false);
+    mapObjRef.current = map;
 
     return () => {
       map.setTarget(undefined);
@@ -147,12 +94,9 @@ const Map: React.FC = () => {
   }, [wmsURL, wmsLayer]);
 
   const toggleRectangleTool = () => {
-    if (dragBoxRef.current) {
-      const isActive = !rectangleToolActive;
-      dragBoxRef.current.setActive(isActive);
-      setRectangleToolActive(isActive);
-    }
-    if (!rectangleToolActive) {
+    const newState = !rectangleToolActive;
+    setRectangleToolActive(newState);
+    if (newState) {
       toast.success("Use Ctrl+Drag to select an area", {
         theme: "dark",
         icon: false,
@@ -170,6 +114,121 @@ const Map: React.FC = () => {
   const handleSatelliteLayerChange = (layer: string) => {
     window.alert(`Setting Satellite layer to: ${layer}`);
     setSatelliteLayer(layer);
+  };
+
+  // Mouse event handlers for custom box
+  const onMouseDown = (e: React.MouseEvent) => {
+    if (!rectangleToolActive) return;
+
+    // Require ctrl key if desired (similar to platformModifierKeyOnly)
+    if (!e.ctrlKey) return;
+
+    setIsDrawing(true);
+    setStartPixel([e.clientX, e.clientY]);
+    setCurrentPixel([e.clientX, e.clientY]);
+
+    if (selectionBoxRef.current) {
+      selectionBoxRef.current.style.display = "block";
+      selectionBoxRef.current.style.left = `${e.clientX}px`;
+      selectionBoxRef.current.style.top = `${e.clientY}px`;
+      selectionBoxRef.current.style.width = `0px`;
+      selectionBoxRef.current.style.height = `0px`;
+    }
+  };
+
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!isDrawing || !startPixel) return;
+    setCurrentPixel([e.clientX, e.clientY]);
+
+    const dx = e.clientX - startPixel[0];
+    const dy = e.clientY - startPixel[1];
+    const side = Math.max(Math.abs(dx), Math.abs(dy));
+
+    // Determine top-left corner for the square
+    const left = dx < 0 ? startPixel[0] - side : startPixel[0];
+    const top = dy < 0 ? startPixel[1] - side : startPixel[1];
+
+    if (selectionBoxRef.current) {
+      selectionBoxRef.current.style.left = `${left}px`;
+      selectionBoxRef.current.style.top = `${top}px`;
+      selectionBoxRef.current.style.width = `${side}px`;
+      selectionBoxRef.current.style.height = `${side}px`;
+    }
+  };
+
+  const onMouseUp = async (e: React.MouseEvent) => {
+    if (!isDrawing || !startPixel || !mapObjRef.current) return;
+    setIsDrawing(false);
+
+    // Compute final square extent in map coordinates
+    const dx = (currentPixel ? currentPixel[0] : startPixel[0]) - startPixel[0];
+    const dy = (currentPixel ? currentPixel[1] : startPixel[1]) - startPixel[1];
+    const side = Math.max(Math.abs(dx), Math.abs(dy));
+
+    const left = dx < 0 ? startPixel[0] - side : startPixel[0];
+    const top = dy < 0 ? startPixel[1] - side : startPixel[1];
+
+    // Convert screen coordinates to map coordinates
+    const map = mapObjRef.current;
+    const rectTopLeft = map.getCoordinateFromPixel([left, top]);
+    const rectBottomRight = map.getCoordinateFromPixel([left + side, top + side]);
+
+    if (!rectTopLeft || !rectBottomRight) {
+      if (selectionBoxRef.current) {
+        selectionBoxRef.current.style.display = "none";
+      }
+      return;
+    }
+
+    const [minX, maxY] = rectTopLeft;    // top-left
+    const [maxX, minY] = rectBottomRight; // bottom-right
+
+    // Transform to EPSG:4326 (if map is in EPSG:3857)
+    const transformedExtent = transformExtent([minX, minY, maxX, maxY], "EPSG:3857", "EPSG:4326");
+    const [wMinX, wMinY, wMaxX, wMaxY] = transformedExtent;
+
+    const width = 512;
+    const height = 512;
+
+    const params = new URLSearchParams({
+      service: "WMS",
+      version: "1.1.1",
+      request: "GetMap",
+      layers: satelliteLayerRef.current,
+      styles: "",
+      bbox: `${wMinX},${wMinY},${wMaxX},${wMaxY}`,
+      width: width.toString(),
+      height: height.toString(),
+      srs: "EPSG:4326",
+      format: "image/png",
+      transparent: "true",
+    });
+
+    const tileURL = `${wmsURL}&${params.toString()}`;
+    console.log("Fetching tile from:", tileURL);
+
+    try {
+      const response = await fetch(tileURL);
+      if (!response.ok) throw new Error(`Failed to fetch tile image: ${response.statusText}`);
+
+      const blob = await response.blob();
+      const objectURL = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = objectURL;
+      link.download = "tile.png";
+      link.click();
+      URL.revokeObjectURL(objectURL);
+
+      console.log("Tile saved successfully.");
+    } catch (error) {
+      console.error("Error fetching tile:", error);
+    }
+
+    // Hide the selection box
+    if (selectionBoxRef.current) {
+      selectionBoxRef.current.style.display = "none";
+    }
   };
 
   return (
@@ -194,7 +253,24 @@ const Map: React.FC = () => {
         >
           <PiRectangleDashed size={22} />
         </button>
-        <div ref={mapRef} className="w-full h-full"></div>
+        <div
+          ref={mapRef}
+          className="w-full h-full"
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+        ></div>
+        <div
+          ref={selectionBoxRef}
+          style={{
+            display: "none",
+            position: "fixed",
+            border: "2px dashed #000",
+            backgroundColor: "rgba(0, 0, 0, 0.1)",
+            pointerEvents: "none",
+            zIndex: 9999,
+          }}
+        ></div>
       </div>
     </div>
   );
