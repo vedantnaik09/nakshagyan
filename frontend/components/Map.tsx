@@ -4,7 +4,6 @@ import { Map as OlMap, View } from "ol";
 import TileLayer from "ol/layer/Tile";
 import { fromLonLat } from "ol/proj";
 import TileWMS from "ol/source/TileWMS";
-import { platformModifierKeyOnly } from "ol/events/condition";
 import { transformExtent } from "ol/proj";
 import "ol/ol.css";
 import { PiRectangleDashed } from "react-icons/pi";
@@ -16,7 +15,7 @@ const Map: React.FC = () => {
   );
   const [wmsLayer, setWMSLayer] = useState<string>("OSM-WMS");
   const [satelliteLayer, setSatelliteLayer] = useState<string>("OSM-WMS");
-  const satelliteLayerRef = useRef<string>("OSM-WMS"); 
+  const satelliteLayerRef = useRef<string>("OSM-WMS");
   const [layers, setLayers] = useState<string[]>([]);
   const [rectangleToolActive, setRectangleToolActive] = useState<boolean>(false);
 
@@ -116,6 +115,15 @@ const Map: React.FC = () => {
     setSatelliteLayer(layer);
   };
 
+  // Utility function to get mouse position relative to the map container
+  const getRelativePosition = (e: React.MouseEvent): [number, number] => {
+    if (!mapRef.current) return [0, 0];
+    const rect = mapRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    return [x, y];
+  };
+
   // Mouse event handlers for custom box
   const onMouseDown = (e: React.MouseEvent) => {
     if (!rectangleToolActive) return;
@@ -124,13 +132,14 @@ const Map: React.FC = () => {
     if (!e.ctrlKey) return;
 
     setIsDrawing(true);
-    setStartPixel([e.clientX, e.clientY]);
-    setCurrentPixel([e.clientX, e.clientY]);
+    const [x, y] = getRelativePosition(e);
+    setStartPixel([x, y]);
+    setCurrentPixel([x, y]);
 
     if (selectionBoxRef.current) {
       selectionBoxRef.current.style.display = "block";
-      selectionBoxRef.current.style.left = `${e.clientX}px`;
-      selectionBoxRef.current.style.top = `${e.clientY}px`;
+      selectionBoxRef.current.style.left = `${x}px`;
+      selectionBoxRef.current.style.top = `${y}px`;
       selectionBoxRef.current.style.width = `0px`;
       selectionBoxRef.current.style.height = `0px`;
     }
@@ -138,10 +147,11 @@ const Map: React.FC = () => {
 
   const onMouseMove = (e: React.MouseEvent) => {
     if (!isDrawing || !startPixel) return;
-    setCurrentPixel([e.clientX, e.clientY]);
+    const [x, y] = getRelativePosition(e);
+    setCurrentPixel([x, y]);
 
-    const dx = e.clientX - startPixel[0];
-    const dy = e.clientY - startPixel[1];
+    const dx = x - startPixel[0];
+    const dy = y - startPixel[1];
     const side = Math.max(Math.abs(dx), Math.abs(dy));
 
     // Determine top-left corner for the square
@@ -160,15 +170,17 @@ const Map: React.FC = () => {
     if (!isDrawing || !startPixel || !mapObjRef.current) return;
     setIsDrawing(false);
 
-    // Compute final square extent in map coordinates
-    const dx = (currentPixel ? currentPixel[0] : startPixel[0]) - startPixel[0];
-    const dy = (currentPixel ? currentPixel[1] : startPixel[1]) - startPixel[1];
+    const [x, y] = getRelativePosition(e);
+    setCurrentPixel([x, y]);
+
+    const dx = x - startPixel[0];
+    const dy = y - startPixel[1];
     const side = Math.max(Math.abs(dx), Math.abs(dy));
 
     const left = dx < 0 ? startPixel[0] - side : startPixel[0];
     const top = dy < 0 ? startPixel[1] - side : startPixel[1];
 
-    // Convert screen coordinates to map coordinates
+    // Convert screen (pixel) coordinates to map coordinates
     const map = mapObjRef.current;
     const rectTopLeft = map.getCoordinateFromPixel([left, top]);
     const rectBottomRight = map.getCoordinateFromPixel([left + side, top + side]);
@@ -180,15 +192,19 @@ const Map: React.FC = () => {
       return;
     }
 
-    const [minX, maxY] = rectTopLeft;    // top-left
+    const [minX, maxY] = rectTopLeft; // top-left
     const [maxX, minY] = rectBottomRight; // bottom-right
 
     // Transform to EPSG:4326 (if map is in EPSG:3857)
-    const transformedExtent = transformExtent([minX, minY, maxX, maxY], "EPSG:3857", "EPSG:4326");
+    const transformedExtent = transformExtent(
+      [minX, minY, maxX, maxY],
+      "EPSG:3857",
+      "EPSG:4326"
+    );
     const [wMinX, wMinY, wMaxX, wMaxY] = transformedExtent;
 
-    const width = 512;
-    const height = 512;
+    const width = 1536;
+    const height = 1536;
 
     const params = new URLSearchParams({
       service: "WMS",
@@ -209,7 +225,8 @@ const Map: React.FC = () => {
 
     try {
       const response = await fetch(tileURL);
-      if (!response.ok) throw new Error(`Failed to fetch tile image: ${response.statusText}`);
+      if (!response.ok)
+        throw new Error(`Failed to fetch tile image: ${response.statusText}`);
 
       const blob = await response.blob();
       const objectURL = URL.createObjectURL(blob);
@@ -259,18 +276,21 @@ const Map: React.FC = () => {
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
-        ></div>
-        <div
-          ref={selectionBoxRef}
-          style={{
-            display: "none",
-            position: "fixed",
-            border: "2px dashed #000",
-            backgroundColor: "rgba(0, 0, 0, 0.1)",
-            pointerEvents: "none",
-            zIndex: 9999,
-          }}
-        ></div>
+          style={{ position: "relative" }} // Ensure map container is positioned relative
+        >
+          {/* Selection Box */}
+          <div
+            ref={selectionBoxRef}
+            style={{
+              display: "none",
+              position: "absolute", // Change from fixed to absolute
+              border: "2px dashed #000",
+              backgroundColor: "rgba(0, 0, 0, 0.1)",
+              pointerEvents: "none",
+              zIndex: 9999,
+            }}
+          ></div>
+        </div>
       </div>
     </div>
   );
