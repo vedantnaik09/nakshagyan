@@ -1,3 +1,4 @@
+"use client";
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { Map as OlMap, View } from "ol";
@@ -8,7 +9,13 @@ import { platformModifierKeyOnly } from "ol/events/condition";
 import "ol/ol.css";
 import { PiRectangleDashed } from "react-icons/pi";
 import { Sidebar } from "./Sidebar";
-import {reducePrecision, epsg4326toEpsg3857,  epsg3875toEpsg4326} from "../lib/utils";
+import {
+  reducePrecision,
+  epsg4326toEpsg3857,
+  epsg3875toEpsg4326,
+} from "../lib/utils";
+
+import { applyONNXSegmentation } from "./model/Model";
 
 const Map: React.FC = () => {
   const [wmsURL, setWMSURL] = useState<string>(
@@ -23,6 +30,7 @@ const Map: React.FC = () => {
     useState<boolean>(false);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const dragBoxRef = useRef<DragBox | null>(null);
+  const [segmentedImage, setSegmentedImage] = useState<string | null>(null);
 
   const fetchCapabilities = async (url: string) => {
     try {
@@ -45,6 +53,21 @@ const Map: React.FC = () => {
       setLayers(layerNames);
     } catch (error) {
       console.error("Failed to fetch capabilities:", error);
+    }
+  };
+
+  const handleSegmentedImageReady = (segmentedImage: string) => {
+    if (segmentedImage) {
+      const link = document.createElement("a");
+      link.href = segmentedImage;
+      const uniqueFilename = `segmented_mask_${Date.now()}.png`;
+      link.download = uniqueFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      console.log(`segmented_image.png saved successfully.`);
+    } else {
+      console.error("No segmented image found.");
     }
   };
 
@@ -82,7 +105,7 @@ const Map: React.FC = () => {
         }),
       ],
       view: new View({
-        center: epsg4326toEpsg3857([23, 25]), // Initial center of the map
+        center: epsg4326toEpsg3857([122, 37]), // Initial center of the map
         zoom: 1, // Start with a zoom level under 200 m/pixel
         minZoom: 0, // Minimum zoom level
         maxZoom: 200, // Maximum zoom level
@@ -170,13 +193,21 @@ const Map: React.FC = () => {
         const blob = await response.blob();
         const objectURL = URL.createObjectURL(blob);
 
-        const link = document.createElement("a");
-        link.href = objectURL;
-        link.download = "tile.png";
-        link.click();
-        URL.revokeObjectURL(objectURL);
+        const image = new Image();
+        image.src = objectURL;
+        image.onload = () => {
+          // When the image is loaded, trigger segmentation
+          console.log("Tile image loaded.");
+          applyONNXSegmentation(
+            "/models/model_opset19.onnx",
+            image,
+            handleSegmentedImageReady,
+            document.createElement("canvas")
+          );
+        };
 
-        console.log("Tile saved successfully.");
+        // Pass the image object to the segmentation component once it's loaded
+        return image;
       } catch (error) {
         console.error("Error fetching tile:", error);
       }

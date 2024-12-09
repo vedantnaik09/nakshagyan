@@ -6,3 +6,4 @@ export async function downloadMapSegment(base64Image: string) {
   link.click();
   document.body.removeChild(link);
 }
+

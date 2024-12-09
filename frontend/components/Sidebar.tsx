@@ -50,19 +50,19 @@ export function Sidebar({
     initializeBackend();
   }, []);
 
-  useEffect(() => {
-    const loadModel = async () => {
-      try {
-        console.log("Loading model...");
-        const loadedModel = await tf.loadLayersModel(MODEL_URL);
-        console.log("Model loaded successfully:", loadedModel);
-        setModel(loadedModel);
-      } catch (error) {
-        console.error("Error loading TensorFlow model:", error);
-      }
-    };
-    loadModel();
-  }, []);
+  // useEffect(() => {
+  //   const loadModel = async () => {
+  //     try {
+  //       console.log("Loading model...");
+  //       const loadedModel = await tf.loadLayersModel(MODEL_URL);
+  //       console.log("Model loaded successfully:", loadedModel);
+  //       setModel(loadedModel);
+  //     } catch (error) {
+  //       console.error("Error loading TensorFlow model:", error);
+  //     }
+  //   };
+  //   loadModel();
+  // }, []);
 
   const sendToModel = async () => {
     if (!model) {
