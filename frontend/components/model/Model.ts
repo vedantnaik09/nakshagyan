@@ -242,7 +242,7 @@ export const applyONNXSegmentation = async (
     console.log("Loading ONNX model...");
     console.log("providers:", providers);
     const sessionGPU = await ort.InferenceSession.create(modelPath, {
-      executionProviders: ["webgl"],
+      executionProviders: ["wasm"],
     });
 
     console.log("Model loaded successfully:", sessionGPU);  
