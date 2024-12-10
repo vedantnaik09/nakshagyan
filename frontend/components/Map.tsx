@@ -199,7 +199,7 @@ const Map: React.FC = () => {
           // When the image is loaded, trigger segmentation
           console.log("Tile image loaded.");
           applyONNXSegmentation(
-            "/models/model_opset19.onnx",
+            "/models/39epochs_g.onnx",
             image,
             handleSegmentedImageReady,
             document.createElement("canvas")

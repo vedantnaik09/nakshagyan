@@ -1,5 +1,6 @@
 import * as ort from "onnxruntime-web";
 import fx from "glfx";
+import { AnyARecord } from "dns";
 
 const providers = [
   "webgl", // Use GPU if needed
@@ -204,12 +205,32 @@ const preprocessImage = (
     inputTensor[pixelIndex * 3 + 2] = data[i] / 255; // Red
   }
 
-  return new ort.Tensor("float32", inputTensor, [
+  const inputTensorFloat = new ort.Tensor("float32", inputTensor, [
     1,
     3,
     targetSize[0],
     targetSize[1],
   ]);
+
+  saveTensorToFile(inputTensorFloat.data, "tensor_values_js.txt");
+
+  console.log("Preprocessed image tensor:", inputTensorFloat);
+  console.log("Preprocessed image tensor:", inputTensorFloat.dims);
+
+  return inputTensorFloat;
+};
+
+const saveTensorToFile = (tensorData: any, fileName: string) => {
+  const blob = new Blob(
+    [tensorData.join("\n")], // Convert tensor data to a newline-separated string
+    { type: "text/plain" }
+  );
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
 
 const mapSegmentationToColor = (
@@ -245,7 +266,7 @@ export const applyONNXSegmentation = async (
       executionProviders: ["wasm"],
     });
 
-    console.log("Model loaded successfully:", sessionGPU);  
+    console.log("Model loaded successfully:", sessionGPU);
 
     // Preprocess image
     const processedTensor = preprocessImage(inputImage, [256, 256], canvas);
@@ -282,6 +303,8 @@ export const applyONNXSegmentation = async (
       width,
       numClasses
     );
+
+    console.log("Segmentation after processing:", segmentation);
 
     // Map segmentation to color and draw on canvas
     const colorMappedImage = mapSegmentationToColor(
