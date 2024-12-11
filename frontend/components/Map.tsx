@@ -42,9 +42,7 @@ const Map: React.FC = () => {
 
   const fetchCapabilities = async (url: string) => {
     try {
-      const response = await fetch(
-        `${url}service=WMS&request=GetCapabilities`
-      );
+      const response = await fetch(`${url}service=WMS&request=GetCapabilities`);
       const text = await response.text();
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(text, "application/xml");
@@ -208,7 +206,10 @@ const Map: React.FC = () => {
   const onMouseUp = async (e: React.MouseEvent) => {
     if (!isDrawing || !startPixel || !mapObjRef.current) return;
     setIsDrawing(false);
-
+    // Keep the rectangle tool active, but hide the selection box
+    if (selectionBoxRef.current) {
+      selectionBoxRef.current.style.display = "none";
+    }
     const [x, y] = getRelativePosition(e);
     setCurrentPixel([x, y]);
 
@@ -219,7 +220,6 @@ const Map: React.FC = () => {
     const left = dx < 0 ? startPixel[0] - side : startPixel[0];
     const top = dy < 0 ? startPixel[1] - side : startPixel[1];
 
-    // Convert screen (pixel) coordinates to map coordinates
     const map = mapObjRef.current;
     const rectTopLeft = map.getCoordinateFromPixel([left, top]);
     const rectBottomRight = map.getCoordinateFromPixel([
@@ -234,10 +234,9 @@ const Map: React.FC = () => {
       return;
     }
 
-    const [minX, maxY] = rectTopLeft; // top-left
-    const [maxX, minY] = rectBottomRight; // bottom-right
+    const [minX, maxY] = rectTopLeft;
+    const [maxX, minY] = rectBottomRight;
 
-    // Transform to EPSG:4326 (if map is in EPSG:3857)
     const transformedExtent = transformExtent(
       [minX, minY, maxX, maxY],
       "EPSG:3857",
@@ -248,7 +247,7 @@ const Map: React.FC = () => {
     const width = 1536;
     const height = 1536;
 
-    console.log( `${wMinX},${wMinY},${wMaxX},${wMaxY}`);
+    console.log(`${wMinX},${wMinY},${wMaxX},${wMaxY}`);
 
     const params = new URLSearchParams({
       service: "WMS",
@@ -283,7 +282,6 @@ const Map: React.FC = () => {
       const image = new Image();
       image.src = objectURL;
       image.onload = () => {
-        // When the image is loaded, trigger segmentation
         console.log("Tile image loaded.");
         applyONNXSegmentation(
           "/models/39epochs_g.onnx",
@@ -293,15 +291,9 @@ const Map: React.FC = () => {
         );
       };
 
-      // Pass the image object to the segmentation component once it's loaded
       return image;
     } catch (error) {
       console.error("Error fetching tile:", error);
-    }
-
-    // Hide the selection box
-    if (selectionBoxRef.current) {
-      selectionBoxRef.current.style.display = "none";
     }
   };
 
