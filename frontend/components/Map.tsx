@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { Map as OlMap, View } from "ol";
 import TileLayer from "ol/layer/Tile";
@@ -61,6 +61,21 @@ const Map: React.FC = () => {
       console.error("Failed to fetch capabilities:", error);
     }
   };
+
+
+  const handleSetCoordinates = useCallback(
+    (coordinates: { lat: number; lon: number }) => {
+      if (mapObjRef.current) {
+        const view = mapObjRef.current.getView();
+        const transformedCoords = epsg4326toEpsg3857([
+          coordinates.lat,
+          coordinates.lon,
+        ]);
+        view.setCenter(transformedCoords);
+      }
+    },
+    []
+  );
 
   const handleSegmentedImageReady = (segmentedImage: string) => {
     if (segmentedImage) {
@@ -309,6 +324,7 @@ const Map: React.FC = () => {
         availableLayers={layers}
         handleWMSLayerChange={handleWMSLayerChange}
         handleSatelliteLayerChange={handleSatelliteLayerChange}
+        onSetCoordinates={handleSetCoordinates}
       />
       <div className="w-full min-h-full relative">
         <button

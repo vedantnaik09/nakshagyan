@@ -18,18 +18,21 @@ interface SidebarProps {
   availableLayers: string[];
   handleWMSLayerChange: (layer: string) => void;
   handleSatelliteLayerChange: (layer: string) => void;
+  onSetCoordinates: (coordinates: { lat: number; lon: number }) => void;
 }
 
-export function Sidebar({
+export const Sidebar: React.FC<SidebarProps> = ({
   onLayerChange,
   currentLayer,
   handleSetWMSURL,
   availableLayers,
   handleWMSLayerChange,
   handleSatelliteLayerChange,
-}: SidebarProps) {
+  onSetCoordinates,
+}) => {
   const [loading, setLoading] = useState(false);
-  const [model, setModel] = useState<tf.LayersModel | null>(null);
+  const [latitude, setLatitude] = useState<string>("");
+  const [longitude, setLongitude] = useState<string>("");
   const [activeWMSLayer, setActiveWMSLayer] = useState<string | null>(null);
   const [activeSatelliteLayer, setActiveSatelliteLayer] = useState<
     string | null
@@ -50,58 +53,15 @@ export function Sidebar({
     initializeBackend();
   }, []);
 
-  // useEffect(() => {
-  //   const loadModel = async () => {
-  //     try {
-  //       console.log("Loading model...");
-  //       const loadedModel = await tf.loadLayersModel(MODEL_URL);
-  //       console.log("Model loaded successfully:", loadedModel);
-  //       setModel(loadedModel);
-  //     } catch (error) {
-  //       console.error("Error loading TensorFlow model:", error);
-  //     }
-  //   };
-  //   loadModel();
-  // }, []);
+  const handleGoClick = () => {
+    const lat = parseFloat(latitude);
+    const lon = parseFloat(longitude);
 
-  const sendToModel = async () => {
-    if (!model) {
-      console.error("Model is not loaded yet!");
-      return;
-    }
-
-    try {
-      console.log("Preparing image for model...");
-      const img = new Image();
-      img.src = TEST_IMAGE_URL;
-
-      await new Promise((resolve) => (img.onload = resolve));
-
-      const imageTensor = tf.browser.fromPixels(img);
-      console.log("Image Tensor Shape:", imageTensor.shape);
-
-      const resizedTensor = tf.image.resizeBilinear(imageTensor, [256, 256]);
-      const normalizedTensor = resizedTensor.div(255.0).expandDims(0);
-
-      console.log("Normalized Tensor Shape:", normalizedTensor.shape);
-      console.log("Running inference on the model...");
-      const predictions = model.predict(normalizedTensor) as tf.Tensor;
-      console.log("Predictions received:", predictions.dataSync());
-    } catch (error) {
-      console.error("Error sending image to model:", error);
-    }
-  };
-
-  const handleTestImage = async () => {
-    console.log("Test button clicked. Sending pre-loaded image to model...");
-    try {
-      setLoading(true);
-      await sendToModel();
-      console.log("Test image processed successfully.");
-    } catch (error) {
-      console.error("Error testing with pre-loaded image:", error);
-    } finally {
-      setLoading(false);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      onSetCoordinates({ lat, lon });
+    } else {
+      console.error("Invalid latitude or longitude");
+      alert("Please enter valid latitude and longitude values.");
     }
   };
 
@@ -179,12 +139,36 @@ export function Sidebar({
             </div>
           </div>
 
+          <div className="w-fit">
+            <h2 className="text-lg font-semibold mb-2">Jump to Coordinates</h2>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Latitude"
+                className="flex-1 border rounded-md p-2 bg-secondary/50 w-36"
+                value={latitude}
+                onChange={(e) => setLatitude(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="Longitude"
+                className="flex-1 border rounded-md p-2 bg-secondary/50 w-36"
+                value={longitude}
+                onChange={(e) => setLongitude(e.target.value)}
+              />
+              <Button
+                onClick={handleGoClick}
+                className="bg-primary text-primary-foreground px-6"
+              >
+                Go
+              </Button>
+            </div>
+          </div>
+
           <div>
             <h2 className="text-lg font-semibold mb-2">Available Layers</h2>
             {availableLayers.length > 0 ? (
               <div className="space-y-2 h-72 overflow-y-scroll">
-                {" "}
-                {/* Added height and scrolling */}
                 {availableLayers.map((layer, index) => (
                   <div
                     key={index}
@@ -232,19 +216,8 @@ export function Sidebar({
               <p className="text-muted-foreground">No layers available</p>
             )}
           </div>
-
-          <div>
-            <h2 className="text-lg font-semibold mb-2">Actions</h2>
-            <Button
-              onClick={handleTestImage}
-              className="w-full bg-primary text-primary-foreground"
-              disabled={loading}
-            >
-              {loading ? "Processing..." : "Test Pre-loaded Image"}
-            </Button>
-          </div>
         </div>
       </div>
     </div>
   );
-}
+};
