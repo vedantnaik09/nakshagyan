@@ -193,6 +193,11 @@ const Map: React.FC = () => {
         const blob = await response.blob();
         const objectURL = URL.createObjectURL(blob);
 
+        const link = document.createElement("a");
+        link.href = objectURL;
+        link.download = "tile.png";
+        link.click(); 
+
         const image = new Image();
         image.src = objectURL;
         image.onload = () => {
