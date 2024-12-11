@@ -1,7 +1,7 @@
 import * as ort from "onnxruntime-web";
 import fx from "glfx";
 import * as tf from "@tensorflow/tfjs";
-import { DiscAlbum } from "lucide-react";
+import { createMaskTensor, saveTensorToFile } from "@/lib/utils";
 
 const providers = [
   "webgl", // Use GPU if needed
@@ -235,24 +235,16 @@ const imageToTensor = (
   return finalTensor;
 };
 
-const onnxTensorToTf = (onnxdata: any, dims: any): tf.Tensor => {
+const onnxTensorToTf: (onnxdata: any, dims: any) => tf.Tensor = (
+  onnxdata: any,
+  dims: any
+): tf.Tensor => {
   const tensor = tf.tensor(onnxdata, dims, "float32");
   const processedTensor = tf.argMax(tensor, 1); // Keep it as a tensor
   return processedTensor;
 };
 
-const saveTensorToFile = (tensorData: any, fileName: string) => {
-  const blob = new Blob(
-    [tensorData.join("\n")], // Convert tensor data to a newline-separated string
-    { type: "text/plain" }
-  );
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
+
 
 type ColorDict = { [label: string]: [number, number, number] };
 
@@ -296,6 +288,59 @@ const mapSegmentationToRGB = (
       }
     }
   });
+
+  // Create a canvas to render the RGB data
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Unable to get canvas 2D context.");
+  }
+
+  // Create an ImageData object and put it on the canvas
+  const imageData = new ImageData(rgbImage, width, height);
+  ctx.putImageData(imageData, 0, 0);
+
+  // Convert canvas to base64 and return
+  return canvas.toDataURL("image/png"); // Return base64 string of the image
+};
+
+const MaskToRGB = (tensor: tf.Tensor): string => {
+  const tensorSqueezed = tensor.squeeze();
+
+  // Get the shape of the tensor
+  const [height, width] = tensorSqueezed.shape;
+
+  // Ensure the tensor is 2D
+  if (tensorSqueezed.rank !== 2) {
+    throw new Error("Input tensor must be 2D (segmentation map).");
+  }
+
+  // Convert tensor to a 2D array
+  const tensorArray = tensorSqueezed.arraySync() as number[][];
+
+  // Create an empty array to hold the RGBA image (normalized)
+  const rgbImage: Uint8ClampedArray = new Uint8ClampedArray(height * width * 4); // RGBA format
+
+  // Iterate through each pixel and set the RGBA values
+  for (let i = 0; i < height; i++) {
+    for (let j = 0; j < width; j++) {
+      const classId = tensorArray[i][j];
+
+      // Skip if the RGB value is 0 (black)
+      if (classId === 0) continue;
+
+      const offset = (i * width + j) * 4; // RGBA has 4 channels per pixel
+
+      // Assign classId as RGB values (keeping non-zero)
+      rgbImage[offset] = classId; // R
+      rgbImage[offset + 1] = classId; // G
+      rgbImage[offset + 2] = classId; // B
+      rgbImage[offset + 3] = 255; // Alpha channel (fully opaque)
+    }
+  }
 
   // Create a canvas to render the RGB data
   const canvas = document.createElement("canvas");
@@ -371,13 +416,14 @@ export const applyONNXSegmentation = async (
 
     console.log("Segmentation after processing:", segmentation);
     saveTensorToFile(segmentation.dataSync(), "output_Tensor_tf");
+    const maskTensorBase64 = createMaskTensor(segmentation, 0, 'rgb(255, 255, 255)');
+    // saveTensorToFile(maskTensor.dataSync(), "class mask");
+    // const base64ImageMask = MaskToRGB(maskTensor);
     // Map segmentation to color and draw on canvas
     const base64Image = mapSegmentationToRGB(segmentation, colorDictRgb);
 
-    // Create an HTMLImageElement from the base64 data
-    const img = new Image();
-    img.src = base64Image;
     onSegmentedImageReady(base64Image);
+    onSegmentedImageReady(maskTensorBase64);
   } catch (error) {
     console.error("Error applying ONNX segmentation:", error);
   }

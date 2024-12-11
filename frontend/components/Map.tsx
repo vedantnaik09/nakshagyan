@@ -248,6 +248,8 @@ const Map: React.FC = () => {
     const width = 1536;
     const height = 1536;
 
+    console.log( `${wMinX},${wMinY},${wMaxX},${wMaxY}`);
+
     const params = new URLSearchParams({
       service: "WMS",
       version: "1.1.1",
