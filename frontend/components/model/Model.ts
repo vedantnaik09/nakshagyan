@@ -416,14 +416,20 @@ export const applyONNXSegmentation = async (
 
     console.log("Segmentation after processing:", segmentation);
     saveTensorToFile(segmentation.dataSync(), "output_Tensor_tf");
-    const maskTensorBase64 = createMaskTensor(segmentation, 0, 'rgb(255, 255, 255)');
-    // saveTensorToFile(maskTensor.dataSync(), "class mask");
-    // const base64ImageMask = MaskToRGB(maskTensor);
-    // Map segmentation to color and draw on canvas
+    const maskTensorBase64Water = createMaskTensor(segmentation, 0, 'rgb(226, 169, 41)');
+    const maskTensorBase64Land = createMaskTensor(segmentation, 1, 'rgb(132, 41, 246)');
+    const maskTensorBase64Vegetation = createMaskTensor(segmentation, 4, 'rbg(254, 221, 58)');
+    const maskTensorBase64Road = createMaskTensor(segmentation, 2, 'rgb(110, 193, 228)');
+    const maskTensorBase64Building = createMaskTensor(segmentation, 3, 'rgb(60, 16, 152)');
+    
     const base64Image = mapSegmentationToRGB(segmentation, colorDictRgb);
 
     onSegmentedImageReady(base64Image);
-    onSegmentedImageReady(maskTensorBase64);
+    onSegmentedImageReady(maskTensorBase64Water);
+    onSegmentedImageReady(maskTensorBase64Land);
+    onSegmentedImageReady(maskTensorBase64Vegetation);
+    onSegmentedImageReady(maskTensorBase64Road);
+    onSegmentedImageReady(maskTensorBase64Building)
   } catch (error) {
     console.error("Error applying ONNX segmentation:", error);
   }
