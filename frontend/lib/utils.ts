@@ -1,5 +1,6 @@
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+import * as tf from "@tensorflow/tfjs";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -13,7 +14,6 @@ export function cn(...inputs: ClassValue[]) {
 //   y = (y * 20037508.34) / 180;
 //   return [x, y];
 // }
-
 
 export function reducePrecision(
   coord: [number, number],
@@ -53,4 +53,67 @@ export function epsg3875toEpsg4326(coord: [number, number]) {
     (180 / Math.PI);
 
   return [lon, latConverted];
+}
+
+export const saveTensorToFile = (tensorData: any, fileName: string) => {
+  const blob = new Blob(
+    [tensorData.join("\n")], // Convert tensor data to a newline-separated string
+    { type: "text/plain" }
+  );
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+export function createMaskTensor(
+  tensor: tf.Tensor,
+  targetClass: number,
+  color: string
+): string {
+  // Create a canvas to draw the image
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  saveTensorToFile(tensor.dataSync(), 'single class tensor')
+
+  if (!ctx) {
+    throw new Error("Failed to get canvas context");
+  }
+
+  // Get the tensor's shape, assuming it has a batch dimension
+  const [batch, height, width] = tensor.shape;
+
+  if (!height || !width) {
+    throw new Error("Invalid tensor dimensions");
+  }
+
+  // Set canvas dimensions
+  canvas.width = width;
+  canvas.height = height;
+
+  // Convert the tensor to a JavaScript array and remove the batch dimension
+  const tensorArray = tensor.arraySync() as number[][][]; // 3D array
+  const maskArray = tensorArray[0]; // Remove batch dimension
+
+  // Iterate over the tensor and draw the target class with the specified color
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const value = maskArray[y][x]; // Access pixel value
+
+      if (value === targetClass) {
+        ctx.fillStyle = color; // Set color for the target class
+      } else {
+        ctx.fillStyle = "rgb(0, 0, 0)"; // Set default color
+      }
+
+      // Draw the pixel
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+
+  // Convert the canvas content to a base64 image string
+  return canvas.toDataURL();
 }
