@@ -208,11 +208,11 @@ const Map: React.FC = () => {
         console.log("Clicked on an undefined class.");
       }
 
-      // Reload the modal to reflect the changes
-      setModalReload(false);
-      setTimeout(() => {
-        setModalReload(true);
-      }, 10);
+      // // Reload the modal to reflect the changes
+      // setModalReload(false);
+      // setTimeout(() => {
+      //   setModalReload(true);
+      // }, 10);
     };
   };
 
@@ -880,80 +880,115 @@ const Map: React.FC = () => {
         </div>
         {/* ShadCN Modal Implementation */}
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogContent
-            className="sm:max-w-3xl"
-            key={modalReload ? "reload" : "no-reload"}
-          >
-            <DialogHeader>
-              <DialogTitle>Selected Area</DialogTitle>
-              <DialogDescription>
-                Review the selected area and highlight specific features by
-                clicking on them.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="mt-4 relative">
-              {maskImage && (
-                <img
-                  src={maskImage}
-                  alt="Segmentation Mask"
-                  className="absolute top-0 left-0 w-full h-full rounded pointer-events-none z-30"
-                  style={{
-                    display: "block",
-                    maxWidth: "100%",
-                    height: "auto",
-                    mixBlendMode: "multiply", // Adjust blend mode as needed
-                  }}
-                />
-              )}
-              {/* Attach the ref to the img element */}
-              {originalTileImage && (
-                <img
-                  src={originalTileImage}
-                  alt="Original Tile Image"
-                  className="w-full h-auto rounded cursor-pointer absolute z-20 pointer-events-none"
-                  style={{
-                    display: "block",
-                    maxWidth: "100%",
-                    height: "auto",
-                  }}
-                />
-              )}
-              {isModalOpen && (
-                <img
-                  ref={selectedImageRef}
-                  src={currentImages.segmentedImage} // Ensure this value is always valid
-                  alt="Captured Area"
-                  className="w-full h-auto rounded cursor-pointer"
-                  onClick={handleImageClick}
-                  style={{
-                    display: "block",
-                    maxWidth: "100%",
-                    height: "auto",
-                    cursor: "pointer",
-                  }}
-                />
-              )}
-              {/* Optional: Display selected class name */}
-              {highlightedClass !== null && (
-                <div className="absolute top-2 left-2 bg-white bg-opacity-75 p-2 rounded">
-                  <span>Highlighted Class ID: {highlightedClass}</span>
-                </div>
-              )}
-            </div>
-            <DialogFooter className="mt-4">
-              <Button
-                variant="default"
-                onClick={highlightWaterBodies}
-                disabled={!selectedMask}
-              >
-                Highlight Water Bodies
-              </Button>
-              <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-                Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+  <DialogContent
+    className="sm:max-w-3xl max-h-screen overflow-auto"
+    key={modalReload ? "reload" : "no-reload"}
+  >
+    <DialogHeader className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center">
+      <div>
+        <DialogTitle>Selected Area</DialogTitle>
+        <DialogDescription>
+          Review the selected area and highlight specific features by clicking
+          on them.
+        </DialogDescription>
+      </div>
+      <div className="mt-4 sm:mt-0 w-full sm:w-auto">
+        <label
+          htmlFor="layer-select"
+          className="block text-sm font-medium text-gray-700"
+        >
+          Select Layer:
+        </label>
+        <select
+          id="layer-select"
+          className="mt-1 block w-full sm:w-48 p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          value={currentLayer}
+          onChange={(e) => {
+            const selected = e.target.value;
+            setCurrentLayer(
+              selected as "water" | "forests" | "none" | "all"
+            );
+            setMaskImage(
+              selected === "all"
+                ? currentImages.segmentedImage
+                : currentImages.masks[
+                    selected as keyof typeof currentImages.masks
+                  ]
+            );
+          }}
+        >
+          <option value="none">None</option>
+          <option value="water">Water</option>
+          <option value="land">Land</option>
+          <option value="vegetation">Vegetation</option>
+          <option value="road">Road</option>
+          <option value="building">Building</option>
+          <option value="all">All Layers</option>
+        </select>
+      </div>
+    </DialogHeader>
+    <div className="mt-4 relative">
+      {/* Segmentation Overlay */}
+      {maskImage && (
+        <img
+          src={maskImage}
+          alt="Segmentation Mask"
+          className="absolute top-0 left-0 w-full rounded pointer-events-none z-30"
+          style={{
+            display: "block",
+            maxWidth: "100%",
+            height: "auto",
+            mixBlendMode: "multiply",
+          }}
+        />
+      )}
+
+      {/* Original Tile Image */}
+      {originalTileImage && (
+        <img
+          src={originalTileImage}
+          alt="Original Tile Image"
+          className="w-full h-auto rounded cursor-pointer absolute z-20 pointer-events-none"
+          style={{
+            display: "block",
+            maxWidth: "100%",
+            height: "auto",
+          }}
+        />
+      )}
+
+      {/* Selected Image */}
+      {isModalOpen && (
+        <img
+          ref={selectedImageRef}
+          src={currentImages.segmentedImage}
+          alt="Captured Area"
+          className="w-full h-auto rounded cursor-pointer"
+          onClick={handleImageClick}
+          style={{
+            display: "block",
+            maxWidth: "100%",
+            height: "auto",
+            cursor: "pointer",
+          }}
+        />
+      )}
+
+      {/* Highlighted Class Information */}
+      {highlightedClass !== null && (
+        <div className="absolute top-2 left-2 bg-white bg-opacity-75 p-2 rounded">
+          <span>Highlighted Class ID: {highlightedClass}</span>
+        </div>
+      )}
+    </div>
+    <DialogFooter className="mt-4">
+      <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
+        Close
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
       </div>
     </div>
   );
