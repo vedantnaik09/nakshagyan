@@ -82,7 +82,8 @@ const Map: React.FC = () => {
 
   // New state variables for modal
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  // Remove the selectedImage state
+  // const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedMask, setSelectedMask] = useState<string | null>(null);
   const [selectedExtent, setSelectedExtent] = useState<
     [number, number, number, number] | null
@@ -110,9 +111,204 @@ const Map: React.FC = () => {
   // **New State for Mask Image Overlay**
   const [maskImage, setMaskImage] = useState<string | null>(null);
 
+  // **Create a ref for the selected image**
+  const selectedImageRef = useRef<HTMLImageElement | null>(null);
+
+  // **Create a ref to store the segmented image data**
+  const segmentedImageDataRef = useRef<string | null>(null);
+
+  // **Handler Function to Handle Image Clicks**
+  const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!currentImages.segmentedImage) return;
+
+    const img = e.currentTarget;
+
+    // Get the natural (actual) dimensions
+    const naturalWidth = img.naturalWidth;
+    const naturalHeight = img.naturalHeight;
+
+    // Get the displayed dimensions
+    const displayedWidth = img.clientWidth;
+    const displayedHeight = img.clientHeight;
+
+    // Calculate scaling factors
+    const scaleX = naturalWidth / displayedWidth;
+    const scaleY = naturalHeight / displayedHeight;
+
+    // Get click coordinates relative to the image
+    const rect = img.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Map to natural coordinates
+    const pixelX = Math.floor(x * scaleX);
+    const pixelY = Math.floor(y * scaleY);
+
+    // Create a temporary canvas to get pixel data from the SEGMENTED image
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = naturalWidth;
+    tempCanvas.height = naturalHeight;
+    const ctx = tempCanvas.getContext("2d");
+    if (!ctx) return;
+
+    // Draw the SEGMENTED image onto the canvas
+    const tempImage = new Image();
+    tempImage.src = currentImages.segmentedImage;
+    tempImage.crossOrigin = "Anonymous";
+    tempImage.onload = () => {
+      ctx.drawImage(tempImage, 0, 0, naturalWidth, naturalHeight);
+      const pixel = ctx.getImageData(pixelX, pixelY, 1, 1).data;
+      const [r, g, b, a] = pixel;
+
+      // Map the color to the class index based on colorDictRgb
+      const classIndex = Object.keys(colorDictRgb).find(
+        (key) =>
+          colorDictRgb[key as keyof typeof colorDictRgb][0] === b &&
+          colorDictRgb[key as keyof typeof colorDictRgb][1] === g &&
+          colorDictRgb[key as keyof typeof colorDictRgb][2] === r
+      );
+
+      const classIdxToString: {
+        [key: number]: keyof SegmentedImages["masks"];
+      } = {
+        1: "water",
+        2: "land",
+        3: "vegetation",
+        4: "road",
+        5: "building",
+      };
+
+      console.log(
+        "Clicked on pixel with RGB:",
+        r,
+        g,
+        b,
+        "Class Index:",
+        classIndex
+      );
+
+      // Only proceed if classIndex is found
+      if (classIndex !== undefined) {
+        const classKey = classIdxToString[Number(classIndex)];
+
+        console.log(`Class Key: ${classKey}`);
+
+        // Highlight features on the map based on the class
+        highlightFeatures(Number(classIndex));
+
+        setHighlightedClass(Number(classIndex));
+
+        // Dynamically set the mask image based on the clicked class
+        if (currentImages.masks[classKey]) {
+          setMaskImage(currentImages.masks[classKey] as string);
+        }
+      } else {
+        console.log("Clicked on an undefined class.");
+      }
+
+      // Reload the modal to reflect the changes
+      setModalReload(false);
+      setTimeout(() => {
+        setModalReload(true);
+      }, 10);
+    };
+  };
+
+  // Function to highlight all features of a specific class
+  const highlightFeatures = (classId: number) => {
+    if (!selectedExtent) return;
+
+    // Create a mask for the selected class
+    const maskCanvas = document.createElement("canvas");
+    maskCanvas.width = 1536; // Ensure this matches the tile size
+    maskCanvas.height = 1536;
+    const ctx = maskCanvas.getContext("2d");
+    if (!ctx) return;
+
+    // Draw the segmented image onto the canvas
+    const segmentedImage = new Image();
+    segmentedImage.src = currentImages.segmentedImage!;
+    segmentedImage.crossOrigin = "Anonymous";
+    segmentedImage.onload = () => {
+      ctx.drawImage(segmentedImage, 0, 0, maskCanvas.width, maskCanvas.height);
+      const imageData = ctx.getImageData(
+        0,
+        0,
+        maskCanvas.width,
+        maskCanvas.height
+      );
+      const data = imageData.data;
+
+      // Iterate through each pixel and highlight the selected class
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const a = data[i + 3];
+
+        // Compare with colorDictRgb to find the matching class
+        let currentClassId: number | undefined = undefined;
+        for (const [key, color] of Object.entries(colorDictRgb)) {
+          if (color[0] === r && color[1] === g && color[2] === b) {
+            currentClassId = Number(key);
+            break;
+          }
+        }
+
+        if (currentClassId === classId) {
+          // Highlight by setting a semi-transparent color (e.g., red)
+          data[i + 2] = 255; // R
+          data[i + 1] = 0; // G
+          data[i] = 0; // B
+          // data[i + 3] = 150; // Alpha
+        } else {
+          // Make other areas transparent
+          data[i + 3] = 0;
+        }
+      }
+
+      // Put the modified data back onto the canvas
+      ctx.putImageData(imageData, 0, 0);
+      const highlightedMaskURL = maskCanvas.toDataURL("image/png");
+
+      // Overlay the highlighted mask on the map
+      const map = mapObjRef.current;
+      if (!map) return;
+
+      // Remove existing highlight layer if any
+      const existingHighlightLayer = map
+        .getLayers()
+        .getArray()
+        .find((layer) => layer.get("name") === "highlight");
+      if (existingHighlightLayer) {
+        map.removeLayer(existingHighlightLayer);
+      }
+
+      // Create a new Image layer for the highlighted mask
+      const imageLayer = new ImageLayer({
+        source: new ImageStatic({
+          url: highlightedMaskURL,
+          projection: "EPSG:3857",
+          imageExtent: transformExtent(
+            selectedExtent,
+            "EPSG:3857",
+            "EPSG:3857"
+          ), // Ensure consistency
+        }),
+        opacity: 0.6,
+      });
+
+      // Assign a name to the layer using the `set` method
+      imageLayer.set("name", "highlight");
+
+      // Add the layer to the map
+      map.addLayer(imageLayer);
+    };
+  };
+
   useEffect(() => {
-    console.log(selectedImage);
-  }, [selectedImage]);
+    console.log(originalTileImage);
+  }, [originalTileImage]);
 
   // Fetch WMS capabilities
   const fetchCapabilities = async (url: string) => {
@@ -156,9 +352,6 @@ const Map: React.FC = () => {
   const handleSegmentedImageReady = (images: SegmentedImages) => {
     const { segmentedImage, masks } = images;
     if (segmentedImage && masks.water) {
-      // Set the captured image to selectedImage
-      setSelectedImage(originalTileImage);
-
       // Store segmented images for later use
       setCurrentImages(images);
       setSelectedMask(masks.water);
@@ -166,8 +359,21 @@ const Map: React.FC = () => {
       // Reset maskImage when a new segmentation is ready
       setMaskImage(null);
 
-      // Open the modal
-      setIsModalOpen(true);
+      // Preload the image
+      const tempImg = new Image();
+      tempImg.src = segmentedImage;
+      tempImg.onload = () => {
+        if (selectedImageRef.current) {
+          selectedImageRef.current.src = segmentedImage;
+        }
+        // Now, open the modal after the image is loaded
+        setIsModalOpen(true);
+      };
+      tempImg.onerror = (err) => {
+        console.error("Failed to load the segmented image:", err);
+        // Optionally, open the modal even if the image fails to load
+        setIsModalOpen(true);
+      };
     } else {
       console.error("No segmented image or mask found.");
     }
@@ -499,7 +705,7 @@ const Map: React.FC = () => {
 
     const tileURL = `${wmsURL}&${params.toString()}`;
     console.log("Fetching tile from:", tileURL);
-    console.log(selectedImage);
+    console.log(originalTileImage);
     try {
       const response = await fetch(tileURL);
       if (!response.ok)
@@ -627,195 +833,6 @@ const Map: React.FC = () => {
     };
   };
 
-  // **Updated Handler Function to Handle Image Clicks**
-  const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
-    if (!currentImages.segmentedImage) return;
-
-    const img = e.currentTarget;
-
-    // Get the natural (actual) dimensions
-    const naturalWidth = img.naturalWidth;
-    const naturalHeight = img.naturalHeight;
-
-    // Get the displayed dimensions
-    const displayedWidth = img.clientWidth;
-    const displayedHeight = img.clientHeight;
-
-    // Calculate scaling factors
-    const scaleX = naturalWidth / displayedWidth;
-    const scaleY = naturalHeight / displayedHeight;
-
-    // Get click coordinates relative to the image
-    const rect = img.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    // Map to natural coordinates
-    const pixelX = Math.floor(x * scaleX);
-    const pixelY = Math.floor(y * scaleY);
-
-    // Create a temporary canvas to get pixel data from the SEGMENTED image
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = naturalWidth;
-    tempCanvas.height = naturalHeight;
-    const ctx = tempCanvas.getContext("2d");
-    if (!ctx) return;
-
-    // Draw the SEGMENTED image onto the canvas
-    const tempImage = new Image();
-    tempImage.src = currentImages.segmentedImage;
-    tempImage.crossOrigin = "Anonymous";
-    tempImage.onload = () => {
-      ctx.drawImage(tempImage, 0, 0, naturalWidth, naturalHeight);
-      const pixel = ctx.getImageData(pixelX, pixelY, 1, 1).data;
-      const [r, g, b, a] = pixel;
-
-      // Map the color to the class index based on colorDictRgb
-      const classIndex = Object.keys(colorDictRgb).find(
-        (key) =>
-          colorDictRgb[key as keyof typeof colorDictRgb][0] === b &&
-          colorDictRgb[key as keyof typeof colorDictRgb][1] === g &&
-          colorDictRgb[key as keyof typeof colorDictRgb][2] === r
-      );
-
-      const classIdxToString: {
-        [key: number]: keyof SegmentedImages["masks"];
-      } = {
-        1: "water",
-        2: "land",
-        3: "vegetation",
-        4: "road",
-        5: "building",
-      };
-
-      console.log(
-        "Clicked on pixel with RGB:",
-        r,
-        g,
-        b,
-        "Class Index:",
-        classIndex
-      );
-
-      // Only proceed if classIndex is found
-      if (classIndex !== undefined) {
-        const classKey = classIdxToString[Number(classIndex)];
-
-        console.log(`Class Key: ${classKey}`);
-
-        // Highlight features on the map based on the class
-        highlightFeatures(Number(classIndex));
-
-        setHighlightedClass(Number(classIndex));
-
-        // Dynamically set the mask image based on the clicked class
-        if (currentImages.masks[classKey]) {
-          setMaskImage(currentImages.masks[classKey] as string);
-        }
-      } else {
-        console.log("Clicked on an undefined class.");
-      }
-
-      // Reload the modal to reflect the changes
-      setModalReload(false);
-      setTimeout(() => {
-        setModalReload(true);
-      }, 10);
-    };
-  };
-
-  // Function to highlight all features of a specific class
-  const highlightFeatures = (classId: number) => {
-    if (!selectedExtent) return;
-
-    // Create a mask for the selected class
-    const maskCanvas = document.createElement("canvas");
-    maskCanvas.width = 1536; // Ensure this matches the tile size
-    maskCanvas.height = 1536;
-    const ctx = maskCanvas.getContext("2d");
-    if (!ctx) return;
-
-    // Draw the segmented image onto the canvas
-    const segmentedImage = new Image();
-    segmentedImage.src = currentImages.segmentedImage!;
-    segmentedImage.crossOrigin = "Anonymous";
-    segmentedImage.onload = () => {
-      ctx.drawImage(segmentedImage, 0, 0, maskCanvas.width, maskCanvas.height);
-      const imageData = ctx.getImageData(
-        0,
-        0,
-        maskCanvas.width,
-        maskCanvas.height
-      );
-      const data = imageData.data;
-
-      // Iterate through each pixel and highlight the selected class
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        const a = data[i + 3];
-
-        // Compare with colorDictRgb to find the matching class
-        let currentClassId: number | undefined = undefined;
-        for (const [key, color] of Object.entries(colorDictRgb)) {
-          if (color[0] === r && color[1] === g && color[2] === b) {
-            currentClassId = Number(key);
-            break;
-          }
-        }
-
-        if (currentClassId === classId) {
-          // Highlight by setting a semi-transparent color (e.g., red)
-          data[i + 2] = 255; // R
-          data[i + 1] = 0; // G
-          data[i] = 0; // B
-          // data[i + 3] = 150; // Alpha
-        } else {
-          // Make other areas transparent
-          data[i + 3] = 0;
-        }
-      }
-
-      // Put the modified data back onto the canvas
-      ctx.putImageData(imageData, 0, 0);
-      const highlightedMaskURL = maskCanvas.toDataURL("image/png");
-
-      // Overlay the highlighted mask on the map
-      const map = mapObjRef.current;
-      if (!map) return;
-
-      // Remove existing highlight layer if any
-      const existingHighlightLayer = map
-        .getLayers()
-        .getArray()
-        .find((layer) => layer.get("name") === "highlight");
-      if (existingHighlightLayer) {
-        map.removeLayer(existingHighlightLayer);
-      }
-
-      // Create a new Image layer for the highlighted mask
-      const imageLayer = new ImageLayer({
-        source: new ImageStatic({
-          url: highlightedMaskURL,
-          projection: "EPSG:3857",
-          imageExtent: transformExtent(
-            selectedExtent,
-            "EPSG:3857",
-            "EPSG:3857"
-          ), // Ensure consistency
-        }),
-        opacity: 0.6,
-      });
-
-      // Assign a name to the layer using the `set` method
-      imageLayer.set("name", "highlight");
-
-      // Add the layer to the map
-      map.addLayer(imageLayer);
-    };
-  };
-
   return (
     <div className="flex h-full w-full">
       <Sidebar
@@ -873,9 +890,11 @@ const Map: React.FC = () => {
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4 relative">
-              {selectedImage && (
+              {/* Attach the ref to the img element */}
+              {isModalOpen && (
                 <img
-                  src={selectedImage}
+                  ref={selectedImageRef}
+                  src={currentImages.segmentedImage} // Ensure this value is always valid
                   alt="Captured Area"
                   className="w-full h-auto rounded cursor-pointer"
                   onClick={handleImageClick}
