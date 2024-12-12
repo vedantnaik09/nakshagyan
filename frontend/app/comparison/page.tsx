@@ -40,9 +40,6 @@ export default function ComparisonPage() {
       <div className="grid gap-8">
         {imagePairs.map((pair) => (
           <Card key={pair.runId} className="p-6">
-            <h2 className="text-xl font-semibold mb-4">
-              Run: {pair.timestamp.toLocaleString()}
-            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <h3 className="text-lg font-medium mb-2">Original Tile</h3>
