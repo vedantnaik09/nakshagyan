@@ -392,7 +392,7 @@ export const applyONNXSegmentation = async (
     const processedTensor = imageToTensor(inputImage, [256, 256]);
     console.log("Preprocessed image tensor:", processedTensor.shape);
 
-    saveTensorToFile(processedTensor.dataSync(), "input_Tensor");
+    // saveTensorToFile(processedTensor.dataSync(), "input_Tensor");
 
     // Get input and output names
     const inputName = sessionGPU.inputNames[0];
@@ -416,14 +416,14 @@ export const applyONNXSegmentation = async (
     const outputTensor = resultGPU[outputName];
     console.log("Output Tensor:", outputTensor.dims);
 
-    saveTensorToFile(outputTensor.data, "output_Tensor");
+    // saveTensorToFile(outputTensor.data, "output_Tensor");
 
     // Process segmentation
     console.log("Processing Segmentation Output...");
     const segmentation = onnxTensorToTf(outputTensor.data, outputTensor.dims);
 
     console.log("Segmentation after processing:", segmentation);
-    saveTensorToFile(segmentation.dataSync(), "output_Tensor_tf");
+    // saveTensorToFile(segmentation.dataSync(), "output_Tensor_tf");
 
     // Generate mask images for different classes
     const maskTensorBase64Water = createMaskTensor(segmentation, 0, 'rgb(226, 169, 41)');
