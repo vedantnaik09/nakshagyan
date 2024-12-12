@@ -417,7 +417,7 @@ export const applyONNXSegmentation = async (
     console.log("Output Tensor:", outputTensor.dims);
 
     // saveTensorToFile(outputTensor.data, "output_Tensor");
-
+//
     // Process segmentation
     console.log("Processing Segmentation Output...");
     const segmentation = onnxTensorToTf(outputTensor.data, outputTensor.dims);

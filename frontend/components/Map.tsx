@@ -510,7 +510,7 @@ const Map: React.FC = () => {
       }.`
     );
   };
-
+//
   // Initialize map and fetch capabilities
   useEffect(() => {
     if (!mapRef.current) return;
