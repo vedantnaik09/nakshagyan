@@ -95,6 +95,9 @@ const Map: React.FC = () => {
     },
   });
 
+  // **New State for Mask Image Overlay**
+  const [maskImage, setMaskImage] = useState<string | null>(null);
+
   useEffect(() => {
     console.log(selectedImage);
   }, [selectedImage]);
@@ -141,12 +144,17 @@ const Map: React.FC = () => {
   const handleSegmentedImageReady = (images: SegmentedImages) => {
     const { segmentedImage, masks } = images;
     if (segmentedImage && masks.water) {
-      // Keep the original tile image visible
+      // Set the captured image to selectedImage
       setSelectedImage(originalTileImage);
 
       // Store segmented images for later use
       setCurrentImages(images);
       setSelectedMask(masks.water);
+
+      // Reset maskImage when a new segmentation is ready
+      setMaskImage(null);
+
+      // Open the modal
       setIsModalOpen(true);
     } else {
       console.error("No segmented image or mask found.");
@@ -311,7 +319,7 @@ const Map: React.FC = () => {
         }),
       ],
       view: new View({
-        center: epsg4326toEpsg3857([122, 37]), // Adjust as needed
+        center: epsg4326toEpsg3857([55, 25]), // Adjust as needed
         zoom: 10,
         minZoom: 0,
         maxZoom: 20,
@@ -484,11 +492,10 @@ const Map: React.FC = () => {
 
         // Pass the folder name to applyONNXSegmentation
         applyONNXSegmentation(
-          "/models/39epochs_g.onnx",
+          "/models/model.onnx",
           image,
           handleSegmentedImageReady,
           document.createElement("canvas"),
-          folderName // Include the folder name for consistent uploads
         );
       };
     } catch (error) {
@@ -523,10 +530,10 @@ const Map: React.FC = () => {
         // Example condition: Water pixels are pure blue
         if (r === 0 && g === 0 && b === 255) {
           // Highlight water by changing color or adding transparency
-          data[i] = 0; // Red
-          data[i + 1] = 0; // Green
-          data[i + 2] = 255; // Blue
-          data[i + 3] = 150; // Alpha for transparency
+          data[i + 2] = 255; // R
+          data[i + 1] = 0; // G
+          data[i] = 0; // B
+          // data[i + 3] = 150; // Alpha
         } else {
           // Make non-water areas transparent
           data[i + 3] = 0;
@@ -549,7 +556,7 @@ const Map: React.FC = () => {
         map.removeLayer(existingHighlightLayer);
       }
 
-      // Create a new Image layer for highlights using ImageStatic
+      // Create a new Image layer for the highlighted mask
       const imageLayer = new ImageLayer({
         source: new ImageStatic({
           url: highlightedMaskURL,
@@ -646,9 +653,9 @@ const Map: React.FC = () => {
 
         setHighlightedClass(Number(classIndex));
 
-        // Dynamically set the image based on the clicked class
+        // Dynamically set the mask image based on the clicked class
         if (currentImages.masks[classKey]) {
-          setSelectedImage(currentImages.masks[classKey] as string);
+          setMaskImage(currentImages.masks[classKey] as string);
         }
       } else {
         console.log("Clicked on an undefined class.");
@@ -700,10 +707,10 @@ const Map: React.FC = () => {
 
         if (currentClassId === classId) {
           // Highlight by setting a semi-transparent color (e.g., red)
-          data[i] = 255; // R
+          data[i + 2] = 255; // R
           data[i + 1] = 0; // G
-          data[i + 2] = 0; // B
-          data[i + 3] = 150; // Alpha
+          data[i] = 0; // B
+          // data[i + 3] = 150; // Alpha
         } else {
           // Make other areas transparent
           data[i + 3] = 0;
@@ -800,10 +807,23 @@ const Map: React.FC = () => {
               {selectedImage && (
                 <img
                   src={selectedImage}
-                  alt="Selected Area"
+                  alt="Captured Area"
                   className="w-full h-auto rounded cursor-pointer"
                   onClick={handleImageClick}
                   style={{ display: 'block', maxWidth: '100%', height: 'auto', cursor: 'pointer' }}
+                />
+              )}
+              {maskImage && (
+                <img
+                  src={maskImage}
+                  alt="Segmentation Mask"
+                  className="absolute top-0 left-0 w-full h-full rounded pointer-events-none"
+                  style={{
+                    display: 'block',
+                    maxWidth: '100%',
+                    height: 'auto',
+                    mixBlendMode: 'multiply', // Adjust blend mode as needed
+                  }}
                 />
               )}
               {/* Optional: Display selected class name */}
@@ -813,7 +833,7 @@ const Map: React.FC = () => {
                 </div>
               )}
             </div>
-            {/* <DialogFooter className="mt-4">
+            <DialogFooter className="mt-4">
               <Button
                 variant="default"
                 onClick={highlightWaterBodies}
@@ -824,7 +844,7 @@ const Map: React.FC = () => {
               <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
                 Close
               </Button>
-            </DialogFooter> */}
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

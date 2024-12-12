@@ -2,7 +2,6 @@ import * as ort from "onnxruntime-web";
 import fx from "glfx";
 import * as tf from "@tensorflow/tfjs";
 import { createMaskTensor, saveTensorToFile } from "@/lib/utils";
-import { uploadImagesForRun } from "@/lib/uploadImages";
 
 const providers = [
   "webgl", // Use GPU if needed
@@ -442,8 +441,8 @@ export const applyONNXSegmentation = async (
     // Generate segmented image
     const base64Image = mapSegmentationToRGB(segmentation, colorDictRgb);
     console.log("Segmented Image Base64:", base64Image);
-    console.log("Segmented Image Base64:", base64Image);
-    console.log("Segmented Image Base64:", base64Image);
+    // console.log("Segmented Image Base64:", base64Image);
+    // console.log("Segmented Image Base64:", base64Image);
 
 
 
