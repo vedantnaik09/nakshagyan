@@ -1003,7 +1003,7 @@ const Map: React.FC = () => {
                 </div>
               )}
             </div>
-            <DialogFooter className="mt-4 flex justify-between">
+            {/* <DialogFooter className="mt-4 flex justify-between">
               <Button
                 variant="default"
                 onClick={highlightWaterBodies}
@@ -1019,7 +1019,7 @@ const Map: React.FC = () => {
                   Close
                 </Button>
               </div>
-            </DialogFooter>
+            </DialogFooter> */}
           </DialogContent>
         </Dialog>
       </div>

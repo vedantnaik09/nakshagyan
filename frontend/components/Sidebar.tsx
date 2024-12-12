@@ -125,26 +125,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <h2 className="text-lg font-semibold mb-4">Layers</h2>
             <div className="space-y-1">
               {layers.map((layer) => (
-                <Button
-                  key={layer.id}
-                  onClick={() => {onLayerChange(layer.id)}}
-                  variant={currentLayer === layer.id ? "default" : "ghost"}
-                  className={cn(
-                    "w-full justify-start gap-2",
-                    currentLayer === layer.id &&
-                    "bg-primary text-primary-foreground"
-                  )}
-                  title={`Activate ${layer.description}`}
-                >
-                  <layer.icon
+                <div key={layer.id} className="flex items-center justify-between">
+                  <Button
+                    onClick={() => onLayerChange(layer.id)}
+                    variant={currentLayer === layer.id ? "default" : "ghost"}
                     className={cn(
-                      "h-4 w-4",
+                      "w-full justify-start gap-2",
                       currentLayer === layer.id &&
-                      "border-2 border-red-500 rounded"
+                      "bg-primary text-primary-foreground"
                     )}
-                  />
-                  {layer.name}
-                </Button>
+                    title={`Activate ${layer.description}`}
+                  >
+                    <layer.icon
+                      className={cn(
+                        "h-4 w-4",
+                        currentLayer === layer.id && "border-2 border-red-500 rounded"
+                      )}
+                    />
+                    {layer.name}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      // Trigger download of the GeoJSON file
+                      const downloadLink = document.createElement("a");
+                      downloadLink.href = `/data/${layer.id}.geojson`;
+                      downloadLink.download = `${layer.id}.geojson`;
+                      downloadLink.click();
+                    }}
+                    title={`Download ${layer.name} GeoJSON`}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"
+                      />
+                    </svg>
+                  </Button>
+                </div>
               ))}
               <Separator className="my-2" />
               <Button
@@ -157,6 +184,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </Button>
             </div>
           </div>
+
 
           {/* Set WMS URL Section */}
           <div>
