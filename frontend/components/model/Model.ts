@@ -2,6 +2,7 @@ import * as ort from "onnxruntime-web";
 import fx from "glfx";
 import * as tf from "@tensorflow/tfjs";
 import { createMaskTensor, saveTensorToFile } from "@/lib/utils";
+import { uploadImagesForRun } from "@/lib/uploadImages";
 
 const providers = [
   "webgl", // Use GPU if needed
@@ -375,7 +376,8 @@ export const applyONNXSegmentation = async (
   modelPath: string,
   inputImage: HTMLImageElement,
   onSegmentedImageReady: (images: SegmentedImages) => void, // Updated signature
-  canvas: HTMLCanvasElement
+  canvas: HTMLCanvasElement,
+  folderName: string // Pass folder name for consistent uploads
 ): Promise<void> => {
   try {
     // Load ONNX model
@@ -445,6 +447,12 @@ export const applyONNXSegmentation = async (
     // console.log("Segmented Image Base64:", base64Image);
     // console.log("Segmented Image Base64:", base64Image);
 
+    
+    await uploadImagesForRun(base64Image, null, folderName, "segmented.png");
+
+    console.log(`Uploaded base64 image to folder: ${folderName}`);
+
+    console.log(`Uploaded to Cloudinary Folder: ${folderName}`);
 
 
     // Invoke the callback with both segmented image and masks

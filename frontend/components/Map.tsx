@@ -30,6 +30,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { uploadImagesForRun } from "@/lib/uploadImages";
 
 // Define the SegmentedImages type matching the model.ts callback
 type SegmentedImages = {
@@ -50,14 +51,18 @@ const Map: React.FC = () => {
     `https://services.sentinel-hub.com/ogc/wms/${process.env.NEXT_PUBLIC_SENTINEL_INSTANCE_ID}?`
   );
   const [wmsLayer, setWMSLayer] = useState<string>("1_TRUE-COLOR-L1C");
-  const [satelliteLayer, setSatelliteLayer] = useState<string>("1_TRUE-COLOR-L1C");
+  const [satelliteLayer, setSatelliteLayer] =
+    useState<string>("1_TRUE-COLOR-L1C");
   const satelliteLayerRef = useRef<string>("1_TRUE-COLOR-L1C");
   const [layers, setLayers] = useState<string[]>([]);
-  const [rectangleToolActive, setRectangleToolActive] = useState<boolean>(false);
+  const [rectangleToolActive, setRectangleToolActive] =
+    useState<boolean>(false);
   const [modalReload, setModalReload] = useState(false);
 
   // **New State Variable for Current Layer**
-  const [currentLayer, setCurrentLayer] = useState<"water" | "forests" | "none" | "all">("none");
+  const [currentLayer, setCurrentLayer] = useState<
+    "water" | "forests" | "none" | "all"
+  >("none");
 
   // GeoServer Image Mosaic Layer details
   const geoServerWMSURL = `http://${process.env.NEXT_PUBLIC_GEOSERVER_IP}:8080/geoserver/ne/wms`; // Base WMS URL
@@ -70,20 +75,27 @@ const Map: React.FC = () => {
   // Custom selection state
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
   const [startPixel, setStartPixel] = useState<[number, number] | null>(null);
-  const [currentPixel, setCurrentPixel] = useState<[number, number] | null>(null);
+  const [currentPixel, setCurrentPixel] = useState<[number, number] | null>(
+    null
+  );
   const selectionBoxRef = useRef<HTMLDivElement | null>(null);
 
   // New state variables for modal
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedMask, setSelectedMask] = useState<string | null>(null);
-  const [selectedExtent, setSelectedExtent] = useState<[number, number, number, number] | null>(null);
+  const [selectedExtent, setSelectedExtent] = useState<
+    [number, number, number, number] | null
+  >(null);
 
   // Additional state for handling clicks and highlights
   const [highlightedClass, setHighlightedClass] = useState<number | null>(null);
-  const [originalTileImage, setOriginalTileImage] = useState<string | null>(null);
+  const [originalTileImage, setOriginalTileImage] = useState<string | null>(
+    null
+  );
   // State to track GeoServer layer visibility
-  const [geoServerLayerVisible, setGeoServerLayerVisible] = useState<boolean>(true);
+  const [geoServerLayerVisible, setGeoServerLayerVisible] =
+    useState<boolean>(true);
   const [currentImages, setCurrentImages] = useState<SegmentedImages>({
     segmentedImage: "",
     masks: {
@@ -171,7 +183,9 @@ const Map: React.FC = () => {
     const sentinelWMSLayer = map
       .getLayers()
       .getArray()
-      .find((layer) => layer.get("name") === "sentinelWMSLayer") as TileLayer<TileWMS> | undefined;
+      .find((layer) => layer.get("name") === "sentinelWMSLayer") as
+      | TileLayer<TileWMS>
+      | undefined;
 
     if (!sentinelWMSLayer) {
       console.error("Sentinel WMS Layer not found.");
@@ -179,7 +193,9 @@ const Map: React.FC = () => {
     }
 
     // Update LAYERS parameter based on the selected type
-    const newParams: { [key: string]: any } = { ...sentinelWMSLayer.getSource()?.getParams() };
+    const newParams: { [key: string]: any } = {
+      ...sentinelWMSLayer.getSource()?.getParams(),
+    };
 
     switch (type) {
       case "water":
@@ -212,7 +228,9 @@ const Map: React.FC = () => {
       const sentinelWMSLayer = map
         .getLayers()
         .getArray()
-        .find((layer) => layer.get("name") === "sentinelWMSLayer") as TileLayer<TileWMS> | undefined;
+        .find((layer) => layer.get("name") === "sentinelWMSLayer") as
+        | TileLayer<TileWMS>
+        | undefined;
 
       if (sentinelWMSLayer) {
         const source = sentinelWMSLayer.getSource();
@@ -231,7 +249,9 @@ const Map: React.FC = () => {
       const sentinelWMSLayer = map
         .getLayers()
         .getArray()
-        .find((layerObj) => layerObj.get("name") === "sentinelWMSLayer") as TileLayer<TileWMS> | undefined;
+        .find((layerObj) => layerObj.get("name") === "sentinelWMSLayer") as
+        | TileLayer<TileWMS>
+        | undefined;
 
       if (sentinelWMSLayer) {
         sentinelWMSLayer.getSource()?.updateParams({ LAYERS: layer });
@@ -257,14 +277,19 @@ const Map: React.FC = () => {
     const geoServerLayer = map
       .getLayers()
       .getArray()
-      .find((layer) => layer.get("name") === "geoServerImageMosaic") as TileLayer<TileWMS> | undefined;
+      .find((layer) => layer.get("name") === "geoServerImageMosaic") as
+      | TileLayer<TileWMS>
+      | undefined;
 
     if (!geoServerLayer) {
       console.error("GeoServer Image Mosaic Layer not found.");
       // Log all current layers for debugging
-      map.getLayers().getArray().forEach((layer, index) => {
-        console.log(`Layer ${index}:`, layer.get("name"));
-      });
+      map
+        .getLayers()
+        .getArray()
+        .forEach((layer, index) => {
+          console.log(`Layer ${index}:`, layer.get("name"));
+        });
       return;
     }
 
@@ -272,7 +297,9 @@ const Map: React.FC = () => {
     geoServerLayer.setVisible(newVisibility);
     setGeoServerLayerVisible(newVisibility);
     console.log(
-      `GeoServer Image Mosaic Layer is now ${newVisibility ? "visible" : "hidden"}.`
+      `GeoServer Image Mosaic Layer is now ${
+        newVisibility ? "visible" : "hidden"
+      }.`
     );
   };
 
@@ -472,8 +499,7 @@ const Map: React.FC = () => {
 
     const tileURL = `${wmsURL}&${params.toString()}`;
     console.log("Fetching tile from:", tileURL);
-    console.log(selectedImage)
-
+    console.log(selectedImage);
     try {
       const response = await fetch(tileURL);
       if (!response.ok)
@@ -484,6 +510,13 @@ const Map: React.FC = () => {
 
       // Store the original tile image URL
       setOriginalTileImage(objectURL);
+      const folderName = `Run_${new Date()
+        .toISOString()
+        .replace(/[:.]/g, "_")}`;
+
+      // Upload tile image to Cloudinary
+      const tileBase64 = await blobToBase64(blob);
+      await uploadImagesForRun(tileBase64, null, folderName, "tile.png");
 
       const image = new Image();
       image.src = objectURL;
@@ -496,11 +529,20 @@ const Map: React.FC = () => {
           image,
           handleSegmentedImageReady,
           document.createElement("canvas"),
+          folderName
         );
       };
     } catch (error) {
       console.error("Error fetching tile:", error);
     }
+  };
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   };
 
   // Function to highlight water bodies (existing functionality)
@@ -561,7 +603,11 @@ const Map: React.FC = () => {
         source: new ImageStatic({
           url: highlightedMaskURL,
           projection: "EPSG:3857",
-          imageExtent: transformExtent(selectedExtent, "EPSG:3857", "EPSG:3857"), // Ensure consistency
+          imageExtent: transformExtent(
+            selectedExtent,
+            "EPSG:3857",
+            "EPSG:3857"
+          ), // Ensure consistency
         }),
         opacity: 0.6,
       });
@@ -602,10 +648,10 @@ const Map: React.FC = () => {
     const pixelY = Math.floor(y * scaleY);
 
     // Create a temporary canvas to get pixel data from the SEGMENTED image
-    const tempCanvas = document.createElement('canvas');
+    const tempCanvas = document.createElement("canvas");
     tempCanvas.width = naturalWidth;
     tempCanvas.height = naturalHeight;
-    const ctx = tempCanvas.getContext('2d');
+    const ctx = tempCanvas.getContext("2d");
     if (!ctx) return;
 
     // Draw the SEGMENTED image onto the canvas
@@ -625,12 +671,14 @@ const Map: React.FC = () => {
           colorDictRgb[key as keyof typeof colorDictRgb][2] === r
       );
 
-      const classIdxToString: { [key: number]: keyof SegmentedImages["masks"] } = {
+      const classIdxToString: {
+        [key: number]: keyof SegmentedImages["masks"];
+      } = {
         1: "water",
         2: "land",
         3: "vegetation",
         4: "road",
-        5: "building"
+        5: "building",
       };
 
       console.log(
@@ -686,7 +734,12 @@ const Map: React.FC = () => {
     segmentedImage.crossOrigin = "Anonymous";
     segmentedImage.onload = () => {
       ctx.drawImage(segmentedImage, 0, 0, maskCanvas.width, maskCanvas.height);
-      const imageData = ctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+      const imageData = ctx.getImageData(
+        0,
+        0,
+        maskCanvas.width,
+        maskCanvas.height
+      );
       const data = imageData.data;
 
       // Iterate through each pixel and highlight the selected class
@@ -739,7 +792,11 @@ const Map: React.FC = () => {
         source: new ImageStatic({
           url: highlightedMaskURL,
           projection: "EPSG:3857",
-          imageExtent: transformExtent(selectedExtent, "EPSG:3857", "EPSG:3857"), // Ensure consistency
+          imageExtent: transformExtent(
+            selectedExtent,
+            "EPSG:3857",
+            "EPSG:3857"
+          ), // Ensure consistency
         }),
         opacity: 0.6,
       });
@@ -767,8 +824,9 @@ const Map: React.FC = () => {
       />
       <div className="w-full min-h-full relative">
         <button
-          className={`absolute mx-auto my-2 top-2 left-0 right-0 w-fit p-2 z-10 rounded ${rectangleToolActive ? "bg-black " : "bg-black bg-opacity-50"
-            }`}
+          className={`absolute mx-auto my-2 top-2 left-0 right-0 w-fit p-2 z-10 rounded ${
+            rectangleToolActive ? "bg-black " : "bg-black bg-opacity-50"
+          }`}
           onClick={toggleRectangleTool}
         >
           <PiRectangleDashed size={22} />
@@ -796,11 +854,15 @@ const Map: React.FC = () => {
         </div>
         {/* ShadCN Modal Implementation */}
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogContent className="sm:max-w-3xl" key={modalReload ? "reload" : "no-reload"}>
+          <DialogContent
+            className="sm:max-w-3xl"
+            key={modalReload ? "reload" : "no-reload"}
+          >
             <DialogHeader>
               <DialogTitle>Selected Area</DialogTitle>
               <DialogDescription>
-                Review the selected area and highlight specific features by clicking on them.
+                Review the selected area and highlight specific features by
+                clicking on them.
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4 relative">
@@ -810,7 +872,12 @@ const Map: React.FC = () => {
                   alt="Captured Area"
                   className="w-full h-auto rounded cursor-pointer"
                   onClick={handleImageClick}
-                  style={{ display: 'block', maxWidth: '100%', height: 'auto', cursor: 'pointer' }}
+                  style={{
+                    display: "block",
+                    maxWidth: "100%",
+                    height: "auto",
+                    cursor: "pointer",
+                  }}
                 />
               )}
               {maskImage && (
@@ -819,10 +886,10 @@ const Map: React.FC = () => {
                   alt="Segmentation Mask"
                   className="absolute top-0 left-0 w-full h-full rounded pointer-events-none"
                   style={{
-                    display: 'block',
-                    maxWidth: '100%',
-                    height: 'auto',
-                    mixBlendMode: 'multiply', // Adjust blend mode as needed
+                    display: "block",
+                    maxWidth: "100%",
+                    height: "auto",
+                    mixBlendMode: "multiply", // Adjust blend mode as needed
                   }}
                 />
               )}
