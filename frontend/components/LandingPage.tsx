@@ -55,6 +55,9 @@ export default function LandingPage() {
               <Button 
                 size="lg" 
                 className="bg-red-600 hover:bg-red-700 text-white"
+                onClick={() => {
+                  window.location.href = '/maps';
+                }}
               >
                 Get Started <ArrowRight className="ml-2" />
               </Button>
@@ -62,6 +65,9 @@ export default function LandingPage() {
                 size="lg" 
                 variant="outline" 
                 className="border-red-600 text-red-600 hover:bg-red-600/10"
+                onClick={() => {
+                  window.location.href = '/maps';
+                }}
               >
                 <Globe2 className="mr-2" /> View Demo
               </Button>
@@ -97,7 +103,11 @@ export default function LandingPage() {
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
-            <Button size="lg" className="bg-red-600 hover:bg-red-700 text-white">
+            <Button size="lg" className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                window.location.href = '/maps';
+              }}
+            >
               Start Mapping Now <ArrowRight className="ml-2" />
             </Button>
           </motion.div>

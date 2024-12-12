@@ -1,3 +1,5 @@
+// Sidebar.tsx
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -12,24 +14,31 @@ const MODEL_URL = "/models/39epochs_g.onnx";
 const TEST_IMAGE_URL = "/image.png";
 
 interface SidebarProps {
-  onLayerChange: (type: "water" | "forests" | "none" | "all") => void;
-  currentLayer: "water" | "forests" | "none" | "all";
+  onLayerChange: (type: "water" | "vegetation" | "road" | "land" | "building" | "none" | "all") => void;
+  currentLayer: "water" | "vegetation" | "road" | "land" | "building" | "none" | "all";
   handleSetWMSURL: (url: string) => void;
   availableLayers: string[];
   handleWMSLayerChange: (layer: string) => void;
   handleSatelliteLayerChange: (layer: string) => void;
+  onSetCoordinates: (coordinates: { lat: number; lon: number }) => void;
+  handleToggleGeoServerLayer: () => void; // New prop for toggling GeoServer layer
+  geoServerLayerVisible: boolean; // New prop for layer visibility (optional)
 }
 
-export function Sidebar({
+export const Sidebar: React.FC<SidebarProps> = ({
   onLayerChange,
   currentLayer,
   handleSetWMSURL,
   availableLayers,
   handleWMSLayerChange,
   handleSatelliteLayerChange,
-}: SidebarProps) {
+  onSetCoordinates,
+  handleToggleGeoServerLayer, // Destructure the new prop
+  geoServerLayerVisible, // Destructure the new prop (optional)
+}) => {
   const [loading, setLoading] = useState(false);
-  const [model, setModel] = useState<tf.LayersModel | null>(null);
+  const [latitude, setLatitude] = useState<string>("");
+  const [longitude, setLongitude] = useState<string>("");
   const [activeWMSLayer, setActiveWMSLayer] = useState<string | null>(null);
   const [activeSatelliteLayer, setActiveSatelliteLayer] = useState<
     string | null
@@ -50,58 +59,15 @@ export function Sidebar({
     initializeBackend();
   }, []);
 
-  // useEffect(() => {
-  //   const loadModel = async () => {
-  //     try {
-  //       console.log("Loading model...");
-  //       const loadedModel = await tf.loadLayersModel(MODEL_URL);
-  //       console.log("Model loaded successfully:", loadedModel);
-  //       setModel(loadedModel);
-  //     } catch (error) {
-  //       console.error("Error loading TensorFlow model:", error);
-  //     }
-  //   };
-  //   loadModel();
-  // }, []);
+  const handleGoClick = () => {
+    const lat = parseFloat(latitude);
+    const lon = parseFloat(longitude);
 
-  const sendToModel = async () => {
-    if (!model) {
-      console.error("Model is not loaded yet!");
-      return;
-    }
-
-    try {
-      console.log("Preparing image for model...");
-      const img = new Image();
-      img.src = TEST_IMAGE_URL;
-
-      await new Promise((resolve) => (img.onload = resolve));
-
-      const imageTensor = tf.browser.fromPixels(img);
-      console.log("Image Tensor Shape:", imageTensor.shape);
-
-      const resizedTensor = tf.image.resizeBilinear(imageTensor, [256, 256]);
-      const normalizedTensor = resizedTensor.div(255.0).expandDims(0);
-
-      console.log("Normalized Tensor Shape:", normalizedTensor.shape);
-      console.log("Running inference on the model...");
-      const predictions = model.predict(normalizedTensor) as tf.Tensor;
-      console.log("Predictions received:", predictions.dataSync());
-    } catch (error) {
-      console.error("Error sending image to model:", error);
-    }
-  };
-
-  const handleTestImage = async () => {
-    console.log("Test button clicked. Sending pre-loaded image to model...");
-    try {
-      setLoading(true);
-      await sendToModel();
-      console.log("Test image processed successfully.");
-    } catch (error) {
-      console.error("Error testing with pre-loaded image:", error);
-    } finally {
-      setLoading(false);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      onSetCoordinates({ lat, lon });
+    } else {
+      console.error("Invalid latitude or longitude");
+      alert("Please enter valid latitude and longitude values.");
     }
   };
 
@@ -113,8 +79,26 @@ export function Sidebar({
       description: "Show water bodies and water features",
     },
     {
-      id: "forests",
-      name: "Forest Areas",
+      id: "vegetation",
+      name: "Vegetation Areas",
+      icon: Trees,
+      description: "Show forest coverage and vegetation",
+    },
+    {
+      id: "road",
+      name: "Road Areas",
+      icon: Trees,
+      description: "Show forest coverage and vegetation",
+    },
+    {
+      id: "land",
+      name: "Land Areas",
+      icon: Trees,
+      description: "Show forest coverage and vegetation",
+    },
+    {
+      id: "building",
+      name: "Building Areas",
       icon: Trees,
       description: "Show forest coverage and vegetation",
     },
@@ -124,36 +108,70 @@ export function Sidebar({
       icon: Layers,
       description: "Show all available layers",
     },
+    {
+      id: "none",
+      name: "None Layers",
+      icon: Layers,
+      description: "Show all available layers",
+    },
   ] as const;
 
   return (
     <div className="h-screen flex flex-col">
       <div className="flex-1 overflow-y-auto">
         <div className="space-y-4 p-4">
+          {/* Layers Section */}
           <div>
             <h2 className="text-lg font-semibold mb-4">Layers</h2>
             <div className="space-y-1">
               {layers.map((layer) => (
-                <Button
-                  key={layer.id}
-                  onClick={() => onLayerChange(layer.id)}
-                  variant={currentLayer === layer.id ? "default" : "ghost"}
-                  className={cn(
-                    "w-full justify-start gap-2",
-                    currentLayer === layer.id &&
-                      "bg-primary text-primary-foreground"
-                  )}
-                  title={`Activate ${layer.description}`}
-                >
-                  <layer.icon
+                <div key={layer.id} className="flex items-center justify-between">
+                  <Button
+                    onClick={() => onLayerChange(layer.id)}
+                    variant={currentLayer === layer.id ? "default" : "ghost"}
                     className={cn(
-                      "h-4 w-4",
+                      "w-full justify-start gap-2",
                       currentLayer === layer.id &&
-                        "border-2 border-red-500 rounded"
+                      "bg-primary text-primary-foreground"
                     )}
-                  />
-                  {layer.name}
-                </Button>
+                    title={`Activate ${layer.description}`}
+                  >
+                    <layer.icon
+                      className={cn(
+                        "h-4 w-4",
+                        currentLayer === layer.id && "border-2 border-red-500 rounded"
+                      )}
+                    />
+                    {layer.name}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      // Trigger download of the GeoJSON file
+                      const downloadLink = document.createElement("a");
+                      downloadLink.href = `/data/${layer.id}.geojson`;
+                      downloadLink.download = `${layer.id}.geojson`;
+                      downloadLink.click();
+                    }}
+                    title={`Download ${layer.name} GeoJSON`}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"
+                      />
+                    </svg>
+                  </Button>
+                </div>
               ))}
               <Separator className="my-2" />
               <Button
@@ -167,6 +185,8 @@ export function Sidebar({
             </div>
           </div>
 
+
+          {/* Set WMS URL Section */}
           <div>
             <h2 className="text-lg font-semibold mb-2">Set WMS URL</h2>
             <div className="flex flex-col gap-2">
@@ -179,12 +199,38 @@ export function Sidebar({
             </div>
           </div>
 
+          {/* Jump to Coordinates Section */}
+          <div className="w-fit">
+            <h2 className="text-lg font-semibold mb-2">Jump to Coordinates</h2>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Latitude"
+                className="flex-1 border rounded-md p-2 bg-secondary/50 w-36"
+                value={latitude}
+                onChange={(e) => setLatitude(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="Longitude"
+                className="flex-1 border rounded-md p-2 bg-secondary/50 w-36"
+                value={longitude}
+                onChange={(e) => setLongitude(e.target.value)}
+              />
+              <Button
+                onClick={handleGoClick}
+                className="bg-primary text-primary-foreground px-6"
+              >
+                Go
+              </Button>
+            </div>
+          </div>
+
+          {/* Available Layers Section */}
           <div>
             <h2 className="text-lg font-semibold mb-2">Available Layers</h2>
             {availableLayers.length > 0 ? (
               <div className="space-y-2 h-72 overflow-y-scroll">
-                {" "}
-                {/* Added height and scrolling */}
                 {availableLayers.map((layer, index) => (
                   <div
                     key={index}
@@ -202,9 +248,8 @@ export function Sidebar({
                         title="Set layer to view"
                       >
                         <Globe2
-                          color={`${
-                            activeWMSLayer === layer ? "green" : "white"
-                          }`}
+                          color={`${activeWMSLayer === layer ? "green" : "white"
+                            }`}
                           className="h-4 w-4"
                         />
                       </Button>
@@ -218,9 +263,8 @@ export function Sidebar({
                         title="Set layer for satellite segmentation"
                       >
                         <Satellite
-                          color={`${
-                            activeSatelliteLayer === layer ? "green" : "white"
-                          }`}
+                          color={`${activeSatelliteLayer === layer ? "green" : "white"
+                            }`}
                           className="h-4 w-4"
                         />
                       </Button>
@@ -233,18 +277,23 @@ export function Sidebar({
             )}
           </div>
 
+          {/* GeoServer Layer Toggle Section */}
           <div>
-            <h2 className="text-lg font-semibold mb-2">Actions</h2>
+            <h2 className="text-lg font-semibold mb-2">GeoServer Layer</h2>
             <Button
-              onClick={handleTestImage}
-              className="w-full bg-primary text-primary-foreground"
-              disabled={loading}
+              onClick={handleToggleGeoServerLayer}
+              className="w-full justify-start gap-2"
+              variant="ghost"
+              title="Toggle GeoServer Image Mosaic Layer"
             >
-              {loading ? "Processing..." : "Test Pre-loaded Image"}
+              <Globe2 className="h-4 w-4" />
+              {geoServerLayerVisible ? "Hide" : "Show"} GeoServer Layer
             </Button>
           </div>
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default Sidebar;

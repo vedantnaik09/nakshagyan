@@ -1,19 +1,33 @@
+// model/Model.ts
+
 import * as ort from "onnxruntime-web";
 import fx from "glfx";
 import * as tf from "@tensorflow/tfjs";
 import { createMaskTensor, saveTensorToFile } from "@/lib/utils";
+import { uploadImagesForRun } from "@/lib/uploadImages";
 
 const providers = [
   "webgl", // Use GPU if needed
 ];
 
-const colorDictRgb: ColorDict = {
+export const colorDictRgb: ColorDict = {
   0: [41, 169, 226],
   1: [246, 41, 132],
   2: [228, 193, 110],
   3: [152, 16, 60],
   4: [58, 221, 254],
   5: [155, 155, 155],
+};
+
+type SegmentedImages = {
+  segmentedImage: string;
+  masks: {
+    water: string;
+    land: string;
+    vegetation: string;
+    road: string;
+    building: string;
+  };
 };
 
 const applyColorJitter = (
@@ -212,7 +226,7 @@ const preprocessImage = (
     targetSize[1],
   ]);
 
-  saveTensorToFile(inputTensorFloat.data, "tensor_values_js.txt");
+  // saveTensorToFile(inputTensorFloat.data, "tensor_values_js.txt");
 
   console.log("Preprocessed image tensor:", inputTensorFloat);
   console.log("Preprocessed image tensor:", inputTensorFloat.dims);
@@ -271,25 +285,28 @@ const mapSegmentationToRGB = (
   // Convert tensor to a 2D array
   const tensorArray = tensorSqueezed.arraySync() as number[][];
 
-  // Create an empty array to hold the RGBA image (normalized)
-  const rgbImage: Uint8ClampedArray = new Uint8ClampedArray(height * width * 4); // RGBA format
+  // Create an empty array to hold the RGBA image
+  const rgbaImage: Uint8ClampedArray = new Uint8ClampedArray(height * width * 4); // RGBA format
 
-  // Map each label to its corresponding color
-  Object.entries(colorDictRGB).forEach(([_, color], idx) => {
-    for (let i = 0; i < height; i++) {
-      for (let j = 0; j < width; j++) {
-        if (tensorArray[i][j] === idx) {
-          const offset = (i * width + j) * 4; // RGBA has 4 channels per pixel
-          rgbImage[offset] = color[0]; // R
-          rgbImage[offset + 1] = color[1]; // G
-          rgbImage[offset + 2] = color[2]; // B
-          rgbImage[offset + 3] = 255; // Alpha channel (fully opaque)
-        }
-      }
+  // Iterate through each pixel and assign colors
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const classId = tensorArray[y][x];
+      const color = colorDictRGB[classId.toString()] || [0, 0, 0]; // Default to black if classId not found
+
+      const offset = (y * width + x) * 4;
+
+      // Assign RGB values
+      rgbaImage[offset] = color[0];     // R
+      rgbaImage[offset + 1] = color[1]; // G
+      rgbaImage[offset + 2] = color[2]; // B
+
+      // Assign Alpha channel
+      rgbaImage[offset + 3] = classId !== 0 ? 255 : 0; // Fully opaque if classId is not 0, else transparent
     }
-  });
+  }
 
-  // Create a canvas to render the RGB data
+  // Create a canvas to render the RGBA data
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -300,7 +317,7 @@ const mapSegmentationToRGB = (
   }
 
   // Create an ImageData object and put it on the canvas
-  const imageData = new ImageData(rgbImage, width, height);
+  const imageData = new ImageData(rgbaImage, width, height);
   ctx.putImageData(imageData, 0, 0);
 
   // Convert canvas to base64 and return
@@ -321,28 +338,32 @@ const MaskToRGB = (tensor: tf.Tensor): string => {
   // Convert tensor to a 2D array
   const tensorArray = tensorSqueezed.arraySync() as number[][];
 
-  // Create an empty array to hold the RGBA image (normalized)
-  const rgbImage: Uint8ClampedArray = new Uint8ClampedArray(height * width * 4); // RGBA format
+  // Create an empty array to hold the RGBA image
+  const rgbaImage: Uint8ClampedArray = new Uint8ClampedArray(height * width * 4); // RGBA format
 
   // Iterate through each pixel and set the RGBA values
-  for (let i = 0; i < height; i++) {
-    for (let j = 0; j < width; j++) {
-      const classId = tensorArray[i][j];
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const classId = tensorArray[y][x];
 
-      // Skip if the RGB value is 0 (black)
+      // Skip if the class ID is 0 (transparent)
       if (classId === 0) continue;
 
-      const offset = (i * width + j) * 4; // RGBA has 4 channels per pixel
+      const offset = (y * width + x) * 4;
 
-      // Assign classId as RGB values (keeping non-zero)
-      rgbImage[offset] = classId; // R
-      rgbImage[offset + 1] = classId; // G
-      rgbImage[offset + 2] = classId; // B
-      rgbImage[offset + 3] = 255; // Alpha channel (fully opaque)
+      // Assign RGB values based on class ID
+      const color = colorDictRgb[classId.toString()] || [0, 0, 0]; // Default to black if classId not found
+
+      rgbaImage[offset + 2] = color[0];     // R
+      rgbaImage[offset + 1] = color[1]; // G
+      rgbaImage[offset + 0] = color[2]; // B
+
+      // Assign Alpha channel
+      rgbaImage[offset + 3] = 255; // Fully opaque
     }
   }
 
-  // Create a canvas to render the RGB data
+  // Create a canvas to render the RGBA data
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -353,7 +374,7 @@ const MaskToRGB = (tensor: tf.Tensor): string => {
   }
 
   // Create an ImageData object and put it on the canvas
-  const imageData = new ImageData(rgbImage, width, height);
+  const imageData = new ImageData(rgbaImage, width, height);
   ctx.putImageData(imageData, 0, 0);
 
   // Convert canvas to base64 and return
@@ -363,13 +384,15 @@ const MaskToRGB = (tensor: tf.Tensor): string => {
 export const applyONNXSegmentation = async (
   modelPath: string,
   inputImage: HTMLImageElement,
-  onSegmentedImageReady: (base64: string) => void,
-  canvas: HTMLCanvasElement
+  onSegmentedImageReady: (images: SegmentedImages) => void, // Updated signature
+  canvas: HTMLCanvasElement,
+  folderName: string ,// Pass folder name for consistent uploads
+  topLeft: { lat: number; lon: number },
+  bottomRight: { lat: number; lon: number }
 ): Promise<void> => {
   try {
     // Load ONNX model
     console.log("Loading ONNX model...");
-    console.log("providers:", providers);
     const sessionGPU = await ort.InferenceSession.create(modelPath, {
       executionProviders: ["wasm"],
     });
@@ -380,56 +403,80 @@ export const applyONNXSegmentation = async (
     const processedTensor = imageToTensor(inputImage, [256, 256]);
     console.log("Preprocessed image tensor:", processedTensor.shape);
 
-    saveTensorToFile(processedTensor.dataSync(), "input_Tensor");
+    // saveTensorToFile(processedTensor.dataSync(), "input_Tensor");
 
-    // Check the input name expected by the model
-    const inputName = sessionGPU.inputNames[0]; // Access the first input name
+    // Get input and output names
+    const inputName = sessionGPU.inputNames[0];
     console.log("Model input name:", inputName);
 
     // Run model inference
-
     const inputTensorONNX = new ort.Tensor(
       "float32",
       processedTensor.dataSync(),
       processedTensor.shape
     );
-    saveTensorToFile(inputTensorONNX.data, "input_Tensor_ONNX");
+    // saveTensorToFile(inputTensorONNX.data, "input_Tensor_ONNX");
     const resultGPU = await sessionGPU.run({ [inputName]: inputTensorONNX });
 
     console.log("GPU Result:", resultGPU);
 
-    // Check the output name(s)
-    const outputName = sessionGPU.outputNames[0]; // Access the first output name
+    // Get output tensor
+    const outputName = sessionGPU.outputNames[0];
     console.log("Model output name:", outputName);
 
-    // Get the output tensor
     const outputTensor = resultGPU[outputName];
     console.log("Output Tensor:", outputTensor.dims);
 
-    saveTensorToFile(outputTensor.data, "output_Tensor");
-
-    // const outputData = outputTensor.data as Float32Array;
-
-    // Use processSegmentationOutput to decode segmentation
+    // saveTensorToFile(outputTensor.data, "output_Tensor");
+//
+    // Process segmentation
     console.log("Processing Segmentation Output...");
     const segmentation = onnxTensorToTf(outputTensor.data, outputTensor.dims);
 
     console.log("Segmentation after processing:", segmentation);
-    saveTensorToFile(segmentation.dataSync(), "output_Tensor_tf");
-    const maskTensorBase64Water = createMaskTensor(segmentation, 0, 'rgb(226, 169, 41)');
-    const maskTensorBase64Land = createMaskTensor(segmentation, 1, 'rgb(132, 41, 246)');
-    const maskTensorBase64Vegetation = createMaskTensor(segmentation, 4, 'rbg(254, 221, 58)');
-    const maskTensorBase64Road = createMaskTensor(segmentation, 2, 'rgb(110, 193, 228)');
-    const maskTensorBase64Building = createMaskTensor(segmentation, 3, 'rgb(60, 16, 152)');
-    
-    const base64Image = mapSegmentationToRGB(segmentation, colorDictRgb);
+    // saveTensorToFile(segmentation.dataSync(), "output_Tensor_tf");
 
-    onSegmentedImageReady(base64Image);
-    onSegmentedImageReady(maskTensorBase64Water);
-    onSegmentedImageReady(maskTensorBase64Land);
-    onSegmentedImageReady(maskTensorBase64Vegetation);
-    onSegmentedImageReady(maskTensorBase64Road);
-    onSegmentedImageReady(maskTensorBase64Building)
+    // Generate mask images for different classes with RGBA
+    const maskTensorBase64Water = createMaskTensor(segmentation, 0, 'rgba(41, 169, 226, 1)', topLeft, bottomRight, 'water');
+    const maskTensorBase64Land = createMaskTensor(segmentation, 1, 'rgba(246, 41, 132, 1)', topLeft, bottomRight, 'land');
+    const maskTensorBase64Vegetation = createMaskTensor(segmentation, 2, 'rgba(228, 193, 110, 1)', topLeft, bottomRight, 'vegetation');
+    const maskTensorBase64Road = createMaskTensor(segmentation, 3, 'rgba(152, 16, 60, 1)', topLeft, bottomRight, 'road');
+    const maskTensorBase64Building = createMaskTensor(segmentation, 4, 'rgba(58, 221, 254, 1)', topLeft, bottomRight, 'building');
+
+    localStorage.setItem("base64", JSON.stringify({
+      "water": maskTensorBase64Water,
+      "land": maskTensorBase64Land,
+      "vegetation": maskTensorBase64Vegetation,
+      "road": maskTensorBase64Road,
+      "building": maskTensorBase64Building,
+    }));
+
+    // Generate segmented image with RGBA
+    const base64Image = mapSegmentationToRGB(segmentation, colorDictRgb);
+    // console.log("Segmented Image Base64:", base64Image);
+
+    downloadImage(base64Image, "output_segmented");
+    console.log("Segmented Image Base64:", base64Image);
+    // console.log("Segmented Image Base64:", base64Image);
+    // console.log("Segmented Image Base64:", base64Image);
+
+    
+    await uploadImagesForRun(base64Image, null, folderName, "segmented.png");
+
+    console.log(`Uploaded base64 image to folder: ${folderName}`);
+
+    console.log(`Uploaded to Cloudinary Folder: ${folderName}`);
+    // Invoke the callback with both segmented image and masks
+    onSegmentedImageReady({
+      segmentedImage: base64Image,
+      masks: {
+        water: maskTensorBase64Water,
+        land: maskTensorBase64Land,
+        vegetation: maskTensorBase64Vegetation,
+        road: maskTensorBase64Road,
+        building: maskTensorBase64Building,
+      },
+    });
   } catch (error) {
     console.error("Error applying ONNX segmentation:", error);
   }
