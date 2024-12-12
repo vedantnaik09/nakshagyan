@@ -1,6 +1,8 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import * as tf from "@tensorflow/tfjs";
+import * as turf from 'turf';
+import { isoLines } from 'marching-squares';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -71,7 +73,10 @@ export const saveTensorToFile = (tensorData: any, fileName: string) => {
 export function createMaskTensor(
   tensor: tf.Tensor,
   targetClass: number,
-  color: string
+  color: string,
+  topLeft: { lat: number; lon: number },
+  bottomRight: { lat: number; lon: number },
+  title: string
 ): string {
   // Create a canvas to draw the image
   const canvas = document.createElement("canvas");
@@ -98,6 +103,9 @@ export function createMaskTensor(
   const tensorArray = tensor.arraySync() as number[][][]; // 3D array
   const maskArray = tensorArray[0]; // Remove batch dimension
 
+  const waterMask = maskArray.map((row) => row.map((value) => value === targetClass ? 1 : 0));
+  downloadGeoJSONFromMask(waterMask, topLeft, bottomRight, title);
+
   // Iterate over the tensor and draw the target class with the specified color
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -117,3 +125,128 @@ export function createMaskTensor(
   // Convert the canvas content to a base64 image string
   return canvas.toDataURL();
 }
+
+// export function downloadGeoJSONFromMask(
+//   mask: number[][],
+//   topLeft: { lat: number; lon: number },
+//   bottomRight: { lat: number; lon: number }
+// ): void {
+//   // Define the threshold for water detection
+//   const threshold = [0.5];
+
+//   // Generate isoLines from the mask
+//   const lines = isoLines(mask, threshold);
+
+//   // Convert isoLines output into GeoJSON polygons
+//   const features = lines.flatMap((contours) =>
+//     contours
+//       .map((path: number[][]) => {
+//         // Convert each path from mask coordinates to latitude/longitude
+//         const latLonPath = path.map(([x, y]) => {
+//           const lat =
+//             topLeft.lat + (y / mask.length) * (bottomRight.lat - topLeft.lat);
+//           const lon =
+//             topLeft.lon + (x / mask[0].length) * (bottomRight.lon - topLeft.lon);
+//           return [lon, lat]; // Ensure [lon, lat] order for GeoJSON
+//         });
+
+//         // Ensure the path is closed for GeoJSON polygons
+//         if (
+//           latLonPath.length > 0 &&
+//           latLonPath[0][0] !== latLonPath[latLonPath.length - 1][0] &&
+//           latLonPath[0][1] !== latLonPath[latLonPath.length - 1][1]
+//         ) {
+//           latLonPath.push(latLonPath[0]);
+//         }
+
+//         return turf.polygon([latLonPath]);
+//       })
+//       .filter((polygon) => {
+//         // Check if the polygon spans the entire mask area
+//         const bbox = turf.bbox(polygon); // Get the bounding box of the polygon
+//         return !(
+//           bbox[0] === topLeft.lon && // West
+//           bbox[1] === bottomRight.lat && // South
+//           bbox[2] === bottomRight.lon && // East
+//           bbox[3] === topLeft.lat // North
+//         );
+//       })
+//   );
+
+//   const geoJSON = turf.featureCollection(features);
+
+//   // Convert GeoJSON to a string
+//   const geoJSONString = JSON.stringify(geoJSON, null, 2);
+
+//   // Create a Blob and trigger download
+//   const blob = new Blob([geoJSONString], { type: 'application/json' });
+//   const url = URL.createObjectURL(blob);
+
+//   const a = document.createElement('a');
+//   a.href = url;
+//   a.download = 'water_bodies.geojson';
+//   a.click();
+
+//   // Cleanup
+//   URL.revokeObjectURL(url);
+// }
+
+export async function downloadGeoJSONFromMask(
+  mask: number[][],
+  topLeft: { lat: number; lon: number },
+  bottomRight: { lat: number; lon: number },
+  title: string
+): Promise<void> {
+  const height = mask.length;
+  const width = mask[0].length;
+
+  const features = [];
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (mask[y][x] === 1) {
+        // Approximate polygon around each cell
+        const latTop = topLeft.lat + (y / height) * (bottomRight.lat - topLeft.lat);
+        const lonLeft = topLeft.lon + (x / width) * (bottomRight.lon - topLeft.lon);
+        const latBottom = topLeft.lat + ((y + 1) / height) * (bottomRight.lat - topLeft.lat);
+        const lonRight = topLeft.lon + ((x + 1) / width) * (bottomRight.lon - topLeft.lon);
+
+        const cellPolygon = turf.polygon([
+          [
+            [lonLeft, latTop],
+            [lonRight, latTop],
+            [lonRight, latBottom],
+            [lonLeft, latBottom],
+            [lonLeft, latTop],
+          ],
+        ]);
+        features.push(cellPolygon);
+      }
+    }
+  }
+
+  const geoJSON = turf.featureCollection(features);
+  const geoJSONString = JSON.stringify(geoJSON, null, 2);
+
+  // Send the GeoJSON data to the API route for saving on the server
+  try {
+    const response = await fetch('/api/geojson', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ geoJSONString, title }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to save GeoJSON');
+    }
+
+    console.log('GeoJSON saved successfully!');
+  } catch (error) {
+    console.error('Error saving GeoJSON:', error);
+  }
+}
+
+
+
