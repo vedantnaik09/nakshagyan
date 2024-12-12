@@ -60,7 +60,7 @@ const Map: React.FC = () => {
   const [currentLayer, setCurrentLayer] = useState<"water" | "forests" | "none" | "all">("none");
 
   // GeoServer Image Mosaic Layer details
-  const geoServerWMSURL = `http://localhost:8080/geoserver/ne/wms`; // Base WMS URL
+  const geoServerWMSURL = `http://${process.env.NEXT_PUBLIC_GEOSERVER_IP}:8080/geoserver/ne/wms`; // Base WMS URL
   const geoServerLayerName = `ne:tiff`; // Layer name
   const geoServerWMSVersion = `1.3.0`; // Updated to 1.3.0 for consistency
   const geoServerFormat = `image/png`; // Use 'image/png' for compatibility
