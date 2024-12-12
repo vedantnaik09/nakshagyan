@@ -106,7 +106,7 @@ export function createMaskTensor(
       if (value === targetClass) {
         ctx.fillStyle = color; // Set color for the target class
       } else {
-        ctx.fillStyle = "rgb(0, 0, 0)"; // Set default color
+        ctx.fillStyle = "rgba(0, 0, 0, 0)"; // Set default color
       }
 
       // Draw the pixel

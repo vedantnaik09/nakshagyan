@@ -144,7 +144,7 @@ const Map: React.FC = () => {
     const pixelX = Math.floor(x * scaleX);
     const pixelY = Math.floor(y * scaleY);
 
-    console.log({pixelX, pixelY})
+    console.log({ pixelX, pixelY });
 
     // Create a temporary canvas to get pixel data from the SEGMENTED image
     const tempCanvas = document.createElement("canvas");
@@ -892,7 +892,32 @@ const Map: React.FC = () => {
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4 relative">
+              {maskImage && (
+                <img
+                  src={maskImage}
+                  alt="Segmentation Mask"
+                  className="absolute top-0 left-0 w-full h-full rounded pointer-events-none z-30"
+                  style={{
+                    display: "block",
+                    maxWidth: "100%",
+                    height: "auto",
+                    mixBlendMode: "multiply", // Adjust blend mode as needed
+                  }}
+                />
+              )}
               {/* Attach the ref to the img element */}
+              {originalTileImage && (
+                <img
+                  src={originalTileImage}
+                  alt="Original Tile Image"
+                  className="w-full h-auto rounded cursor-pointer absolute z-20 pointer-events-none"
+                  style={{
+                    display: "block",
+                    maxWidth: "100%",
+                    height: "auto",
+                  }}
+                />
+              )}
               {isModalOpen && (
                 <img
                   ref={selectedImageRef}
@@ -905,19 +930,6 @@ const Map: React.FC = () => {
                     maxWidth: "100%",
                     height: "auto",
                     cursor: "pointer",
-                  }}
-                />
-              )}
-              {maskImage && (
-                <img
-                  src={maskImage}
-                  alt="Segmentation Mask"
-                  className="absolute top-0 left-0 w-full h-full rounded pointer-events-none"
-                  style={{
-                    display: "block",
-                    maxWidth: "100%",
-                    height: "auto",
-                    mixBlendMode: "multiply", // Adjust blend mode as needed
                   }}
                 />
               )}
