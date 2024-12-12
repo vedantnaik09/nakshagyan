@@ -97,7 +97,11 @@ export default function LandingPage() {
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
-            <Button size="lg" className="bg-red-600 hover:bg-red-700 text-white">
+            <Button size="lg" className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                window.location.href = '/maps';
+              }}
+            >
               Start Mapping Now <ArrowRight className="ml-2" />
             </Button>
           </motion.div>

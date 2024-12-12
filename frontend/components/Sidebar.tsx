@@ -1,3 +1,5 @@
+// Sidebar.tsx
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -19,6 +21,8 @@ interface SidebarProps {
   handleWMSLayerChange: (layer: string) => void;
   handleSatelliteLayerChange: (layer: string) => void;
   onSetCoordinates: (coordinates: { lat: number; lon: number }) => void;
+  handleToggleGeoServerLayer: () => void; // New prop for toggling GeoServer layer
+  geoServerLayerVisible: boolean; // New prop for layer visibility (optional)
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -29,6 +33,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   handleWMSLayerChange,
   handleSatelliteLayerChange,
   onSetCoordinates,
+  handleToggleGeoServerLayer, // Destructure the new prop
+  geoServerLayerVisible, // Destructure the new prop (optional)
 }) => {
   const [loading, setLoading] = useState(false);
   const [latitude, setLatitude] = useState<string>("");
@@ -90,6 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <div className="h-screen flex flex-col">
       <div className="flex-1 overflow-y-auto">
         <div className="space-y-4 p-4">
+          {/* Layers Section */}
           <div>
             <h2 className="text-lg font-semibold mb-4">Layers</h2>
             <div className="space-y-1">
@@ -101,7 +108,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   className={cn(
                     "w-full justify-start gap-2",
                     currentLayer === layer.id &&
-                      "bg-primary text-primary-foreground"
+                    "bg-primary text-primary-foreground"
                   )}
                   title={`Activate ${layer.description}`}
                 >
@@ -109,7 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     className={cn(
                       "h-4 w-4",
                       currentLayer === layer.id &&
-                        "border-2 border-red-500 rounded"
+                      "border-2 border-red-500 rounded"
                     )}
                   />
                   {layer.name}
@@ -127,6 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
+          {/* Set WMS URL Section */}
           <div>
             <h2 className="text-lg font-semibold mb-2">Set WMS URL</h2>
             <div className="flex flex-col gap-2">
@@ -139,6 +147,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
+          {/* Jump to Coordinates Section */}
           <div className="w-fit">
             <h2 className="text-lg font-semibold mb-2">Jump to Coordinates</h2>
             <div className="flex items-center gap-2">
@@ -165,6 +174,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
+          {/* Available Layers Section */}
           <div>
             <h2 className="text-lg font-semibold mb-2">Available Layers</h2>
             {availableLayers.length > 0 ? (
@@ -186,9 +196,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         title="Set layer to view"
                       >
                         <Globe2
-                          color={`${
-                            activeWMSLayer === layer ? "green" : "white"
-                          }`}
+                          color={`${activeWMSLayer === layer ? "green" : "white"
+                            }`}
                           className="h-4 w-4"
                         />
                       </Button>
@@ -202,9 +211,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         title="Set layer for satellite segmentation"
                       >
                         <Satellite
-                          color={`${
-                            activeSatelliteLayer === layer ? "green" : "white"
-                          }`}
+                          color={`${activeSatelliteLayer === layer ? "green" : "white"
+                            }`}
                           className="h-4 w-4"
                         />
                       </Button>
@@ -216,8 +224,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <p className="text-muted-foreground">No layers available</p>
             )}
           </div>
+
+          {/* GeoServer Layer Toggle Section */}
+          <div>
+            <h2 className="text-lg font-semibold mb-2">GeoServer Layer</h2>
+            <Button
+              onClick={handleToggleGeoServerLayer}
+              className="w-full justify-start gap-2"
+              variant="ghost"
+              title="Toggle GeoServer Image Mosaic Layer"
+            >
+              <Globe2 className="h-4 w-4" />
+              {geoServerLayerVisible ? "Hide" : "Show"} GeoServer Layer
+            </Button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
+
+export default Sidebar;

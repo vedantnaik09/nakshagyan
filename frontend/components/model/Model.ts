@@ -7,13 +7,24 @@ const providers = [
   "webgl", // Use GPU if needed
 ];
 
-const colorDictRgb: ColorDict = {
+export const colorDictRgb: ColorDict = {
   0: [41, 169, 226],
   1: [246, 41, 132],
   2: [228, 193, 110],
   3: [152, 16, 60],
   4: [58, 221, 254],
   5: [155, 155, 155],
+};
+
+type SegmentedImages = {
+  segmentedImage: string;
+  masks: {
+    water: string;
+    land: string;
+    vegetation: string;
+    road: string;
+    building: string;
+  };
 };
 
 const applyColorJitter = (
@@ -363,13 +374,12 @@ const MaskToRGB = (tensor: tf.Tensor): string => {
 export const applyONNXSegmentation = async (
   modelPath: string,
   inputImage: HTMLImageElement,
-  onSegmentedImageReady: (base64: string) => void,
+  onSegmentedImageReady: (images: SegmentedImages) => void, // Updated signature
   canvas: HTMLCanvasElement
 ): Promise<void> => {
   try {
     // Load ONNX model
     console.log("Loading ONNX model...");
-    console.log("providers:", providers);
     const sessionGPU = await ort.InferenceSession.create(modelPath, {
       executionProviders: ["wasm"],
     });
@@ -382,12 +392,11 @@ export const applyONNXSegmentation = async (
 
     saveTensorToFile(processedTensor.dataSync(), "input_Tensor");
 
-    // Check the input name expected by the model
-    const inputName = sessionGPU.inputNames[0]; // Access the first input name
+    // Get input and output names
+    const inputName = sessionGPU.inputNames[0];
     console.log("Model input name:", inputName);
 
     // Run model inference
-
     const inputTensorONNX = new ort.Tensor(
       "float32",
       processedTensor.dataSync(),
@@ -398,38 +407,51 @@ export const applyONNXSegmentation = async (
 
     console.log("GPU Result:", resultGPU);
 
-    // Check the output name(s)
-    const outputName = sessionGPU.outputNames[0]; // Access the first output name
+    // Get output tensor
+    const outputName = sessionGPU.outputNames[0];
     console.log("Model output name:", outputName);
 
-    // Get the output tensor
     const outputTensor = resultGPU[outputName];
     console.log("Output Tensor:", outputTensor.dims);
 
     saveTensorToFile(outputTensor.data, "output_Tensor");
 
-    // const outputData = outputTensor.data as Float32Array;
-
-    // Use processSegmentationOutput to decode segmentation
+    // Process segmentation
     console.log("Processing Segmentation Output...");
     const segmentation = onnxTensorToTf(outputTensor.data, outputTensor.dims);
 
     console.log("Segmentation after processing:", segmentation);
     saveTensorToFile(segmentation.dataSync(), "output_Tensor_tf");
+
+    // Generate mask images for different classes
     const maskTensorBase64Water = createMaskTensor(segmentation, 0, 'rgb(226, 169, 41)');
     const maskTensorBase64Land = createMaskTensor(segmentation, 1, 'rgb(132, 41, 246)');
-    const maskTensorBase64Vegetation = createMaskTensor(segmentation, 4, 'rbg(254, 221, 58)');
+    const maskTensorBase64Vegetation = createMaskTensor(segmentation, 4, 'rgb(254, 221, 58)');
     const maskTensorBase64Road = createMaskTensor(segmentation, 2, 'rgb(110, 193, 228)');
     const maskTensorBase64Building = createMaskTensor(segmentation, 3, 'rgb(60, 16, 152)');
-    
+
+    localStorage.setItem("base64", JSON.stringify({
+      "water": maskTensorBase64Water,
+      "land": maskTensorBase64Land,
+      "vegetation": maskTensorBase64Vegetation,
+      "road": maskTensorBase64Road,
+      "building": maskTensorBase64Building,
+    }));
+
+    // Generate segmented image
     const base64Image = mapSegmentationToRGB(segmentation, colorDictRgb);
 
-    onSegmentedImageReady(base64Image);
-    onSegmentedImageReady(maskTensorBase64Water);
-    onSegmentedImageReady(maskTensorBase64Land);
-    onSegmentedImageReady(maskTensorBase64Vegetation);
-    onSegmentedImageReady(maskTensorBase64Road);
-    onSegmentedImageReady(maskTensorBase64Building)
+    // Invoke the callback with both segmented image and masks
+    onSegmentedImageReady({
+      segmentedImage: base64Image,
+      masks: {
+        water: maskTensorBase64Water,
+        land: maskTensorBase64Land,
+        vegetation: maskTensorBase64Vegetation,
+        road: maskTensorBase64Road,
+        building: maskTensorBase64Building,
+      },
+    });
   } catch (error) {
     console.error("Error applying ONNX segmentation:", error);
   }
