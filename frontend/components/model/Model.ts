@@ -223,7 +223,7 @@ const preprocessImage = (
     targetSize[1],
   ]);
 
-  saveTensorToFile(inputTensorFloat.data, "tensor_values_js.txt");
+  // saveTensorToFile(inputTensorFloat.data, "tensor_values_js.txt");
 
   console.log("Preprocessed image tensor:", inputTensorFloat);
   console.log("Preprocessed image tensor:", inputTensorFloat.dims);
@@ -402,7 +402,7 @@ export const applyONNXSegmentation = async (
       processedTensor.dataSync(),
       processedTensor.shape
     );
-    saveTensorToFile(inputTensorONNX.data, "input_Tensor_ONNX");
+    // saveTensorToFile(inputTensorONNX.data, "input_Tensor_ONNX");
     const resultGPU = await sessionGPU.run({ [inputName]: inputTensorONNX });
 
     console.log("GPU Result:", resultGPU);
@@ -441,6 +441,10 @@ export const applyONNXSegmentation = async (
     // Generate segmented image
     const base64Image = mapSegmentationToRGB(segmentation, colorDictRgb);
     console.log("Segmented Image Base64:", base64Image);
+    console.log("Segmented Image Base64:", base64Image);
+    console.log("Segmented Image Base64:", base64Image);
+
+
 
     // Invoke the callback with both segmented image and masks
     onSegmentedImageReady({

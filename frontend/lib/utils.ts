@@ -77,7 +77,7 @@ export function createMaskTensor(
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
 
-  saveTensorToFile(tensor.dataSync(), 'single class tensor')
+  // saveTensorToFile(tensor.dataSync(), 'single class tensor')
 
   if (!ctx) {
     throw new Error("Failed to get canvas context");
