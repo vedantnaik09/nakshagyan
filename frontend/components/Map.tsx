@@ -508,6 +508,13 @@ const Map: React.FC = () => {
       const blob = await response.blob();
       const objectURL = URL.createObjectURL(blob);
 
+      const link = document.createElement("a");
+      link.href = objectURL;
+      const uniqueFilename = `TILE_${Date.now()}.png`;
+      link.download = uniqueFilename;
+      document.body.appendChild(link);
+      link.click();
+
       // Store the original tile image URL
       setOriginalTileImage(objectURL);
       const folderName = `Run_${new Date()
