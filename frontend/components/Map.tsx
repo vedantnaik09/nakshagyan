@@ -144,6 +144,8 @@ const Map: React.FC = () => {
     const pixelX = Math.floor(x * scaleX);
     const pixelY = Math.floor(y * scaleY);
 
+    console.log({pixelX, pixelY})
+
     // Create a temporary canvas to get pixel data from the SEGMENTED image
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = naturalWidth;
@@ -171,11 +173,11 @@ const Map: React.FC = () => {
       const classIdxToString: {
         [key: number]: keyof SegmentedImages["masks"];
       } = {
-        1: "water",
-        2: "land",
-        3: "vegetation",
-        4: "road",
-        5: "building",
+        0: "water",
+        1: "land",
+        2: "vegetation",
+        3: "road",
+        4: "building",
       };
 
       console.log(
