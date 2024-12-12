@@ -408,10 +408,11 @@ const Map: React.FC = () => {
   const onMouseUp = async (e: React.MouseEvent) => {
     if (!isDrawing || !startPixel || !mapObjRef.current) return;
     setIsDrawing(false);
-    // Keep the rectangle tool active, but hide the selection box
+
     if (selectionBoxRef.current) {
       selectionBoxRef.current.style.display = "none";
     }
+
     const [x, y] = getRelativePosition(e);
     setCurrentPixel([x, y]);
 
@@ -429,12 +430,7 @@ const Map: React.FC = () => {
       top + side,
     ]);
 
-    if (!rectTopLeft || !rectBottomRight) {
-      if (selectionBoxRef.current) {
-        selectionBoxRef.current.style.display = "none";
-      }
-      return;
-    }
+    if (!rectTopLeft || !rectBottomRight) return;
 
     const [minX, maxY] = rectTopLeft;
     const [maxX, minY] = rectBottomRight;
@@ -451,8 +447,6 @@ const Map: React.FC = () => {
 
     const width = 1536;
     const height = 1536;
-
-    console.log(`${wMinX},${wMinY},${wMaxX},${wMaxY}`);
 
     const params = new URLSearchParams({
       service: "WMS",
@@ -487,15 +481,16 @@ const Map: React.FC = () => {
       image.src = objectURL;
       image.onload = () => {
         console.log("Tile image loaded.");
+
+        // Pass the folder name to applyONNXSegmentation
         applyONNXSegmentation(
           "/models/39epochs_g.onnx",
           image,
           handleSegmentedImageReady,
-          document.createElement("canvas")
+          document.createElement("canvas"),
+          folderName // Include the folder name for consistent uploads
         );
       };
-
-      return image;
     } catch (error) {
       console.error("Error fetching tile:", error);
     }

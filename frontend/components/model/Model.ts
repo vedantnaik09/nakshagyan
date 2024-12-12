@@ -2,6 +2,7 @@ import * as ort from "onnxruntime-web";
 import fx from "glfx";
 import * as tf from "@tensorflow/tfjs";
 import { createMaskTensor, saveTensorToFile } from "@/lib/utils";
+import { uploadImagesForRun } from "@/lib/uploadImages";
 
 const providers = [
   "webgl", // Use GPU if needed
