@@ -31,6 +31,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
+// Import GeoJSON Format and Vector Layers
+import { GeoJSON } from "ol/format";
+import VectorSource from "ol/source/Vector";
+import VectorLayer from "ol/layer/Vector";
+import { Fill, Stroke, Style } from "ol/style";
+
 // Define the SegmentedImages type matching the model.ts callback
 type SegmentedImages = {
   segmentedImage: string;
@@ -44,7 +50,6 @@ type SegmentedImages = {
 };
 
 const Map: React.FC = () => {
-  const base64 = JSON.parse(localStorage.getItem("base64") || "{}");
   // Existing state variables
   const [wmsURL, setWMSURL] = useState<string>(
     `https://services.sentinel-hub.com/ogc/wms/${process.env.NEXT_PUBLIC_SENTINEL_INSTANCE_ID}?`
@@ -57,7 +62,7 @@ const Map: React.FC = () => {
   const [modalReload, setModalReload] = useState(false);
 
   // **New State Variable for Current Layer**
-  const [currentLayer, setCurrentLayer] = useState<"water" | "forests" | "none" | "all">("none");
+  const [currentLayer, setCurrentLayer] = useState<"water" | "vegetation" | "road" | "land" | "building" | "none" | "all">("none");
 
   // GeoServer Image Mosaic Layer details
   const geoServerWMSURL = `http://localhost:8080/geoserver/ne/wms`; // Base WMS URL
@@ -97,6 +102,9 @@ const Map: React.FC = () => {
 
   // **New State for Mask Image Overlay**
   const [maskImage, setMaskImage] = useState<string | null>(null);
+
+  // **New State for GeoJSON Data**
+  const [geoJSONData, setGeoJSONData] = useState<GeoJSON.GeoJSON | null>(null); // Initialize without GeoJSON
 
   useEffect(() => {
     console.log(selectedImage);
@@ -162,47 +170,53 @@ const Map: React.FC = () => {
   };
 
   // **Handler Function to Change Layers**
-  const onLayerChange = (type: "water" | "forests" | "none" | "all") => {
+  const onLayerChange = async (
+    type: "water" | "vegetation" | "road" | "land" | "building" | "none" | "all"
+  ) => {
     setCurrentLayer(type);
+
     const map = mapObjRef.current;
     if (!map) return;
 
-    // Find the Sentinel WMS layer
-    const sentinelWMSLayer = map
+    // Remove existing segmented layers
+    const layersToRemove = map
       .getLayers()
       .getArray()
-      .find((layer) => layer.get("name") === "sentinelWMSLayer") as TileLayer<TileWMS> | undefined;
+      .filter((layer) =>
+        ["water", "vegetation", "road", "land", "building"].includes(
+          layer.get("name")
+        )
+      );
 
-    if (!sentinelWMSLayer) {
-      console.error("Sentinel WMS Layer not found.");
+    layersToRemove.forEach((layer) => map.removeLayer(layer));
+
+    if (type === "none") {
+      console.log("All segmented layers removed.");
       return;
     }
 
-    // Update LAYERS parameter based on the selected type
-    const newParams: { [key: string]: any } = { ...sentinelWMSLayer.getSource()?.getParams() };
+    try {
+      // Fetch the GeoJSON data for the selected layer type
+      console.log(type)
+      const result = await fetchGeoJSON(type);
 
-    switch (type) {
-      case "water":
-        newParams.LAYERS = "waterLayerName"; // Replace with actual layer name
-        sentinelWMSLayer.setVisible(true);
-        break;
-      case "forests":
-        newParams.LAYERS = "forestsLayerName"; // Replace with actual layer name
-        sentinelWMSLayer.setVisible(true);
-        break;
-      case "all":
-        newParams.LAYERS = "waterLayerName,forestsLayerName"; // Replace with actual layer names
-        sentinelWMSLayer.setVisible(true);
-        break;
-      case "none":
-        sentinelWMSLayer.setVisible(false);
-        break;
-      default:
-        break;
+      console.log(`Adding layer for ${type}`);
+      if (!geoJSONData) {
+        console.log("No   geoJSONData")
+      }
+      addGeoJSONToMap(geoJSONData!);
+
+      // Add a name property to the layer for later identification
+      const mapLayers = map.getLayers().getArray();
+      const addedLayer = mapLayers[mapLayers.length - 1];
+      if (addedLayer instanceof VectorLayer) {
+        addedLayer.set("name", `${type}Layer`);
+      }
+    } catch (error) {
+      console.error(`Failed to fetch or add layer for ${type}:`, error);
     }
-
-    sentinelWMSLayer.getSource()?.updateParams(newParams);
   };
+
 
   // **Handler Function to Set WMS URL**
   const handleSetWMSURL = (url: string) => {
@@ -212,7 +226,9 @@ const Map: React.FC = () => {
       const sentinelWMSLayer = map
         .getLayers()
         .getArray()
-        .find((layer) => layer.get("name") === "sentinelWMSLayer") as TileLayer<TileWMS> | undefined;
+        .find(
+          (layerObj) => layerObj.get("name") === "sentinelWMSLayer"
+        ) as TileLayer<TileWMS> | undefined;
 
       if (sentinelWMSLayer) {
         const source = sentinelWMSLayer.getSource();
@@ -231,7 +247,9 @@ const Map: React.FC = () => {
       const sentinelWMSLayer = map
         .getLayers()
         .getArray()
-        .find((layerObj) => layerObj.get("name") === "sentinelWMSLayer") as TileLayer<TileWMS> | undefined;
+        .find(
+          (layerObj) => layerObj.get("name") === "sentinelWMSLayer"
+        ) as TileLayer<TileWMS> | undefined;
 
       if (sentinelWMSLayer) {
         sentinelWMSLayer.getSource()?.updateParams({ LAYERS: layer });
@@ -257,7 +275,9 @@ const Map: React.FC = () => {
     const geoServerLayer = map
       .getLayers()
       .getArray()
-      .find((layer) => layer.get("name") === "geoServerImageMosaic") as TileLayer<TileWMS> | undefined;
+      .find(
+        (layer) => layer.get("name") === "geoServerImageMosaic"
+      ) as TileLayer<TileWMS> | undefined;
 
     if (!geoServerLayer) {
       console.error("GeoServer Image Mosaic Layer not found.");
@@ -272,8 +292,28 @@ const Map: React.FC = () => {
     geoServerLayer.setVisible(newVisibility);
     setGeoServerLayerVisible(newVisibility);
     console.log(
-      `GeoServer Image Mosaic Layer is now ${newVisibility ? "visible" : "hidden"}.`
+      `GeoServer Image Mosaic Layer is now ${newVisibility ? "visible" : "hidden"
+      }.`
     );
+  };
+
+  const fetchGeoJSON = async (filename: string,) => {
+    try {
+      const response = await fetch("/data/" + filename + ".geojson");
+      console.log(response)
+      if (!response.ok) throw new Error("Failed to fetch GeoJSON data.");
+      const data: GeoJSON.GeoJSON = await response.json();
+      console.log(data)
+      setGeoJSONData(data);
+      console.log("GeoJSON data loaded successfully.");
+    } catch (error) {
+      console.error("Error fetching GeoJSON:", error);
+      toast.error("Failed to load GeoJSON data.", {
+        theme: "dark",
+        hideProgressBar: true,
+        autoClose: 2000,
+      });
+    }
   };
 
   // Initialize map and fetch capabilities
@@ -319,7 +359,7 @@ const Map: React.FC = () => {
         }),
       ],
       view: new View({
-        center: epsg4326toEpsg3857([55, 25]), // Adjust as needed
+        center: epsg4326toEpsg3857([55, 25]), // Dubai coordinates
         zoom: 10,
         minZoom: 0,
         maxZoom: 20,
@@ -334,6 +374,26 @@ const Map: React.FC = () => {
     if (wmsURL) {
       fetchCapabilities(wmsURL);
     }
+
+    // **Fetch GeoJSON Data from Public Folder**
+    // const fetchGeoJSON = async (filename: string, ) => {
+    //   try {
+    //     const response = await fetch("/data/" + filename + ".geojson");
+    //     if (!response.ok) throw new Error("Failed to fetch GeoJSON data.");
+    //     const data: GeoJSON.GeoJSON = await response.json();
+    //     setGeoJSONData(data);
+    //     console.log("GeoJSON data loaded successfully.");
+    //   } catch (error) {
+    //     console.error("Error fetching GeoJSON:", error);
+    //     toast.error("Failed to load GeoJSON data.", {
+    //       theme: "dark",
+    //       hideProgressBar: true,
+    //       autoClose: 2000,
+    //     });
+    //   }
+    // };
+
+    // fetchGeoJSON("water");
 
     return () => {
       map.setTarget(undefined);
@@ -433,10 +493,7 @@ const Map: React.FC = () => {
 
     const map = mapObjRef.current;
     const rectTopLeft = map.getCoordinateFromPixel([left, top]);
-    const rectBottomRight = map.getCoordinateFromPixel([
-      left + side,
-      top + side,
-    ]);
+    const rectBottomRight = map.getCoordinateFromPixel([left + side, top + side]);
 
     if (!rectTopLeft || !rectBottomRight) return;
 
@@ -449,6 +506,9 @@ const Map: React.FC = () => {
       "EPSG:4326"
     );
     const [wMinX, wMinY, wMaxX, wMaxY] = transformedExtent;
+
+    const topLeft = { lat: wMaxY, lon: wMinX };
+    const bottomRight = { lat: wMinY, lon: wMaxX };
 
     // **Set the selectedExtent state**
     setSelectedExtent([wMinX, wMinY, wMaxX, wMaxY]);
@@ -472,7 +532,7 @@ const Map: React.FC = () => {
 
     const tileURL = `${wmsURL}&${params.toString()}`;
     console.log("Fetching tile from:", tileURL);
-    console.log(selectedImage)
+    console.log(selectedImage);
 
     try {
       const response = await fetch(tileURL);
@@ -495,7 +555,10 @@ const Map: React.FC = () => {
           "/models/model.onnx",
           image,
           handleSegmentedImageReady,
+
           document.createElement("canvas"),
+          topLeft,
+          bottomRight
         );
       };
     } catch (error) {
@@ -531,8 +594,8 @@ const Map: React.FC = () => {
         if (r === 0 && g === 0 && b === 255) {
           // Highlight water by changing color or adding transparency
           data[i + 2] = 255; // R
-          data[i + 1] = 0; // G
-          data[i] = 0; // B
+          data[i + 1] = 0;   // G
+          data[i] = 0;       // B
           // data[i + 3] = 150; // Alpha
         } else {
           // Make non-water areas transparent
@@ -561,7 +624,11 @@ const Map: React.FC = () => {
         source: new ImageStatic({
           url: highlightedMaskURL,
           projection: "EPSG:3857",
-          imageExtent: transformExtent(selectedExtent, "EPSG:3857", "EPSG:3857"), // Ensure consistency
+          imageExtent: transformExtent(
+            selectedExtent,
+            "EPSG:3857",
+            "EPSG:3857"
+          ), // Ensure consistency
         }),
         opacity: 0.6,
       });
@@ -574,7 +641,7 @@ const Map: React.FC = () => {
     };
   };
 
-  // **Updated Handler Function to Handle Image Clicks**
+  // **Handler Function to Handle Image Clicks**
   const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
     if (!currentImages.segmentedImage) return;
 
@@ -602,10 +669,10 @@ const Map: React.FC = () => {
     const pixelY = Math.floor(y * scaleY);
 
     // Create a temporary canvas to get pixel data from the SEGMENTED image
-    const tempCanvas = document.createElement('canvas');
+    const tempCanvas = document.createElement("canvas");
     tempCanvas.width = naturalWidth;
     tempCanvas.height = naturalHeight;
-    const ctx = tempCanvas.getContext('2d');
+    const ctx = tempCanvas.getContext("2d");
     if (!ctx) return;
 
     // Draw the SEGMENTED image onto the canvas
@@ -630,7 +697,7 @@ const Map: React.FC = () => {
         2: "land",
         3: "vegetation",
         4: "road",
-        5: "building"
+        5: "building",
       };
 
       console.log(
@@ -699,7 +766,11 @@ const Map: React.FC = () => {
         // Compare with colorDictRgb to find the matching class
         let currentClassId: number | undefined = undefined;
         for (const [key, color] of Object.entries(colorDictRgb)) {
-          if (color[0] === r && color[1] === g && color[2] === b) {
+          if (
+            color[0] === r &&
+            color[1] === g &&
+            color[2] === b
+          ) {
             currentClassId = Number(key);
             break;
           }
@@ -707,10 +778,10 @@ const Map: React.FC = () => {
 
         if (currentClassId === classId) {
           // Highlight by setting a semi-transparent color (e.g., red)
-          data[i + 2] = 255; // R
-          data[i + 1] = 0; // G
-          data[i] = 0; // B
-          // data[i + 3] = 150; // Alpha
+          data[i + 0] = 255; // R
+          data[i + 1] = 0;   // G
+          data[i + 2] = 0;   // B
+          data[i + 3] = 150; // Alpha
         } else {
           // Make other areas transparent
           data[i + 3] = 0;
@@ -739,7 +810,11 @@ const Map: React.FC = () => {
         source: new ImageStatic({
           url: highlightedMaskURL,
           projection: "EPSG:3857",
-          imageExtent: transformExtent(selectedExtent, "EPSG:3857", "EPSG:3857"), // Ensure consistency
+          imageExtent: transformExtent(
+            selectedExtent,
+            "EPSG:3857",
+            "EPSG:3857"
+          ), // Ensure consistency
         }),
         opacity: 0.6,
       });
@@ -750,6 +825,93 @@ const Map: React.FC = () => {
       // Add the layer to the map
       map.addLayer(imageLayer);
     };
+  };
+
+  // **Function to Add GeoJSON Layer to Map**
+  const addGeoJSONToMap = (geojson: GeoJSON.GeoJSON) => {
+    const map = mapObjRef.current;
+    if (!map) {
+      console.error("Map instance not available.");
+      return;
+    }
+
+
+    // **Check if Layer Already Exists**
+    const existingLayers = map.getLayers().getArray();
+
+    existingLayers.forEach((layer) => {
+      if (layer instanceof VectorLayer) {
+        map.removeLayer(layer);
+        console.log("Layer name:", layer.get("name"));
+      }
+    });
+
+
+    // .find(
+    //   (layer) => layer.get("name") === "geoJSONLayer"
+    // ) as VectorLayer<VectorSource> | undefined;
+
+    // console.log("Existing Layer:", existingLayer);
+    // if (existingLayer!) {
+    //   console.log("GeoJSON layer already exists on the map, will remove it and add another");
+    //   // map.removeLayer(existingLayer);
+    //   // return;
+    // }
+    console.log("Hello world");
+    // **Create Vector Source from GeoJSON**
+    const vectorSource = new VectorSource({
+      features: new GeoJSON().readFeatures(geojson, {
+        featureProjection: "EPSG:3857", // Ensure projection matches the map's
+      }),
+    });
+
+    // **Define Custom Style**
+    const vectorStyle = new Style({
+      fill: new Fill({
+        color: "rgba(0, 128, 0, 0.5)", // Semi-transparent green
+      }),
+      stroke: new Stroke({
+        color: "#008000", // Green border
+        width: 2,
+      }),
+    });
+
+    // **Create Vector Layer**
+    const vectorLayer = new VectorLayer({
+      source: vectorSource,
+      style: vectorStyle,
+    });
+
+    // Set the name property after creating the layer
+    vectorLayer.set("name", "geoJSONLayer");
+
+    // **Add Layer to Map**
+    map.addLayer(vectorLayer);
+    console.log("GeoJSON layer added to the map.");
+  };
+  // **Handler for "View in Map" Button**
+  const handleViewInMap = (filename: string) => {
+    if (!geoJSONData) {
+      try {
+        fetchGeoJSON(filename);
+      }
+      catch {
+        console.error("No GeoJSON data available to add to the map.");
+        toast.error("No GeoJSON data available.", {
+          theme: "dark",
+          hideProgressBar: true,
+          autoClose: 2000,
+        });
+      }
+      return;
+    }
+
+    addGeoJSONToMap(geoJSONData);
+    toast.success("GeoJSON layer added to the map.", {
+      theme: "dark",
+      hideProgressBar: true,
+      autoClose: 2000,
+    });
   };
 
   return (
@@ -767,7 +929,7 @@ const Map: React.FC = () => {
       />
       <div className="w-full min-h-full relative">
         <button
-          className={`absolute mx-auto my-2 top-2 left-0 right-0 w-fit p-2 z-10 rounded ${rectangleToolActive ? "bg-black " : "bg-black bg-opacity-50"
+          className={`absolute mx-auto my-2 top-2 left-0 right-0 w-fit p-2 z-10 rounded ${rectangleToolActive ? "bg-black" : "bg-black bg-opacity-50"
             }`}
           onClick={toggleRectangleTool}
         >
@@ -796,7 +958,10 @@ const Map: React.FC = () => {
         </div>
         {/* ShadCN Modal Implementation */}
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogContent className="sm:max-w-3xl" key={modalReload ? "reload" : "no-reload"}>
+          <DialogContent
+            className="sm:max-w-3xl"
+            key={modalReload ? "reload" : "no-reload"}
+          >
             <DialogHeader>
               <DialogTitle>Selected Area</DialogTitle>
               <DialogDescription>
@@ -810,7 +975,12 @@ const Map: React.FC = () => {
                   alt="Captured Area"
                   className="w-full h-auto rounded cursor-pointer"
                   onClick={handleImageClick}
-                  style={{ display: 'block', maxWidth: '100%', height: 'auto', cursor: 'pointer' }}
+                  style={{
+                    display: "block",
+                    maxWidth: "100%",
+                    height: "auto",
+                    cursor: "pointer",
+                  }}
                 />
               )}
               {maskImage && (
@@ -819,10 +989,10 @@ const Map: React.FC = () => {
                   alt="Segmentation Mask"
                   className="absolute top-0 left-0 w-full h-full rounded pointer-events-none"
                   style={{
-                    display: 'block',
-                    maxWidth: '100%',
-                    height: 'auto',
-                    mixBlendMode: 'multiply', // Adjust blend mode as needed
+                    display: "block",
+                    maxWidth: "100%",
+                    height: "auto",
+                    mixBlendMode: "multiply", // Adjust blend mode as needed
                   }}
                 />
               )}
@@ -833,7 +1003,7 @@ const Map: React.FC = () => {
                 </div>
               )}
             </div>
-            <DialogFooter className="mt-4">
+            <DialogFooter className="mt-4 flex justify-between">
               <Button
                 variant="default"
                 onClick={highlightWaterBodies}
@@ -841,9 +1011,14 @@ const Map: React.FC = () => {
               >
                 Highlight Water Bodies
               </Button>
-              <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-                Close
-              </Button>
+              <div className="flex space-x-2">
+                <Button variant="default" onClick={() => handleViewInMap("none")}>
+                  View in Map
+                </Button>
+                <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
+                  Close
+                </Button>
+              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>

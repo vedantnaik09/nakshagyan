@@ -14,8 +14,8 @@ const MODEL_URL = "/models/39epochs_g.onnx";
 const TEST_IMAGE_URL = "/image.png";
 
 interface SidebarProps {
-  onLayerChange: (type: "water" | "forests" | "none" | "all") => void;
-  currentLayer: "water" | "forests" | "none" | "all";
+  onLayerChange: (type: "water" | "vegetation" | "road" | "land" | "building" | "none" | "all") => void;
+  currentLayer: "water" | "vegetation" | "road" | "land" | "building" | "none" | "all";
   handleSetWMSURL: (url: string) => void;
   availableLayers: string[];
   handleWMSLayerChange: (layer: string) => void;
@@ -79,14 +79,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
       description: "Show water bodies and water features",
     },
     {
-      id: "forests",
-      name: "Forest Areas",
+      id: "vegetation",
+      name: "Vegetation Areas",
+      icon: Trees,
+      description: "Show forest coverage and vegetation",
+    },
+    {
+      id: "road",
+      name: "Road Areas",
+      icon: Trees,
+      description: "Show forest coverage and vegetation",
+    },
+    {
+      id: "land",
+      name: "Land Areas",
+      icon: Trees,
+      description: "Show forest coverage and vegetation",
+    },
+    {
+      id: "building",
+      name: "Building Areas",
       icon: Trees,
       description: "Show forest coverage and vegetation",
     },
     {
       id: "all",
       name: "All Layers",
+      icon: Layers,
+      description: "Show all available layers",
+    },
+    {
+      id: "none",
+      name: "None Layers",
       icon: Layers,
       description: "Show all available layers",
     },
@@ -103,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {layers.map((layer) => (
                 <Button
                   key={layer.id}
-                  onClick={() => onLayerChange(layer.id)}
+                  onClick={() => {onLayerChange(layer.id)}}
                   variant={currentLayer === layer.id ? "default" : "ghost"}
                   className={cn(
                     "w-full justify-start gap-2",
