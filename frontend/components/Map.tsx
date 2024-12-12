@@ -555,7 +555,7 @@ const Map: React.FC = () => {
       ],
       view: new View({
         center: epsg4326toEpsg3857([55, 25]), // Adjust as needed
-        zoom: 10,
+        zoom: 3,
         minZoom: 0,
         maxZoom: 20,
         maxResolution: 200,
@@ -927,60 +927,48 @@ const Map: React.FC = () => {
         </select>
       </div>
     </DialogHeader>
-    <div className="mt-4 relative">
-      {/* Segmentation Overlay */}
-      {maskImage && (
-        <img
-          src={maskImage}
-          alt="Segmentation Mask"
-          className="absolute top-0 left-0 w-full rounded pointer-events-none z-30"
-          style={{
-            display: "block",
-            maxWidth: "100%",
-            height: "auto",
-            mixBlendMode: "multiply",
-          }}
-        />
-      )}
+    <div className="mt-4 relative h-[100%] flex items-center justify-center">
+  {/* Segmentation Overlay */}
+  {maskImage && (
+    <img
+      src={maskImage}
+      alt="Segmentation Mask"
+      className="absolute w-[70%] rounded pointer-events-none z-30"
+      style={{
+        display: "block",
+        mixBlendMode: "multiply",
+      }}
+    />
+  )}
 
-      {/* Original Tile Image */}
-      {originalTileImage && (
-        <img
-          src={originalTileImage}
-          alt="Original Tile Image"
-          className="w-full h-auto rounded cursor-pointer absolute z-20 pointer-events-none"
-          style={{
-            display: "block",
-            maxWidth: "100%",
-            height: "auto",
-          }}
-        />
-      )}
+  {/* Original Tile Image */}
+  {originalTileImage && (
+    <img
+      src={originalTileImage}
+      alt="Original Tile Image"
+      className="absolute w-[70%] rounded z-20 pointer-events-none"
+      style={{
+        display: "block",
+      }}
+    />
+  )}
 
-      {/* Selected Image */}
-      {isModalOpen && (
-        <img
-          ref={selectedImageRef}
-          src={currentImages.segmentedImage}
-          alt="Captured Area"
-          className="w-full h-auto rounded cursor-pointer"
-          onClick={handleImageClick}
-          style={{
-            display: "block",
-            maxWidth: "100%",
-            height: "auto",
-            cursor: "pointer",
-          }}
-        />
-      )}
+  {/* Selected Image */}
+  {isModalOpen && (
+    <img
+      ref={selectedImageRef}
+      src={currentImages.segmentedImage}
+      alt="Captured Area"
+      className="w-[70%] rounded cursor-pointer z-10"
+      onClick={handleImageClick}
+      style={{
+        display: "block",
+        cursor: "pointer",
+      }}
+    />
+  )}
+</div>
 
-      {/* Highlighted Class Information */}
-      {highlightedClass !== null && (
-        <div className="absolute top-2 left-2 bg-white bg-opacity-75 p-2 rounded">
-          <span>Highlighted Class ID: {highlightedClass}</span>
-        </div>
-      )}
-    </div>
     <DialogFooter className="mt-4">
       <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
         Close
