@@ -470,6 +470,7 @@ const Map: React.FC = () => {
 
     const tileURL = `${wmsURL}&${params.toString()}`;
     console.log("Fetching tile from:", tileURL);
+    console.log(selectedImage)
 
     try {
       const response = await fetch(tileURL);
@@ -791,7 +792,6 @@ const Map: React.FC = () => {
             }}
           ></div>
         </div>
-
         {/* ShadCN Modal Implementation */}
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="sm:max-w-3xl" key={modalReload ? "reload" : "no-reload"}>

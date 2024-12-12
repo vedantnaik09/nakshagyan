@@ -440,6 +440,7 @@ export const applyONNXSegmentation = async (
 
     // Generate segmented image
     const base64Image = mapSegmentationToRGB(segmentation, colorDictRgb);
+    console.log("Segmented Image Base64:", base64Image);
 
     // Invoke the callback with both segmented image and masks
     onSegmentedImageReady({
