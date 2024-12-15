@@ -1,2 +1,1 @@
 # sih_boiledrice
-/
