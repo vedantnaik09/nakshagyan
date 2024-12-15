@@ -3,7 +3,7 @@ import dynamic from 'next/dynamic';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-const MapComponent = dynamic(() => import('@/components/Map'), {
+const MapComponent = dynamic(() => import('@/components/maps/Map'), {
   ssr: false,
   loading: () => (
     <div className="flex h-screen items-center justify-center">

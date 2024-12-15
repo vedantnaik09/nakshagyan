@@ -1,0 +1,15 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL") // Make sure to add DATABASE_URL in your .env file
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model GeoJSONData {
+  id        Int      @id @default(autoincrement())
+  title     String
+  geojson   Json
+  createdAt DateTime @default(now())
+}

@@ -205,7 +205,7 @@ const preprocessImage = (
   // applyGaussianBlur(canvas);
 
   const preprocessedImageDataURL = canvas.toDataURL("image/png");
-  downloadImage(preprocessedImageDataURL, "preprocessed_image");
+  // downloadImage(preprocessedImageDataURL, "preprocessed_image");
 
   const imageData = ctx.getImageData(0, 0, targetSize[1], targetSize[0]);
   const { data } = imageData;
@@ -455,7 +455,7 @@ export const applyONNXSegmentation = async (
     const base64Image = mapSegmentationToRGB(segmentation, colorDictRgb);
     // console.log("Segmented Image Base64:", base64Image);
 
-    downloadImage(base64Image, "output_segmented");
+    // downloadImage(base64Image, "output_segmented");
     console.log("Segmented Image Base64:", base64Image);
     // console.log("Segmented Image Base64:", base64Image);
     // console.log("Segmented Image Base64:", base64Image);

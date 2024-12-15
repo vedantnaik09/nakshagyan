@@ -5,7 +5,19 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Droplet, Trees, Layers, Globe2, Satellite } from "lucide-react";
+import {
+  Droplet,
+  Trees,
+  Home,        // Updated Icon for Building Areas
+  MapPin,      // Updated Icon for Land Areas
+  Globe2,
+  Satellite,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Layers,
+} from "lucide-react";
+import { FaRoad } from "react-icons/fa"; // Imported BiRoad from react-icons
 import { cn } from "@/lib/utils";
 import * as tf from "@tensorflow/tfjs";
 import "@tensorflow/tfjs-backend-webgl";
@@ -14,15 +26,29 @@ const MODEL_URL = "/models/39epochs_g.onnx";
 const TEST_IMAGE_URL = "/image.png";
 
 interface SidebarProps {
-  onLayerChange: (type: "water" | "vegetation" | "road" | "land" | "building" | "none" | "all") => void;
-  currentLayer: "water" | "vegetation" | "road" | "land" | "building" | "none" | "all";
+  onLayerChange: (
+    type:
+      | "water"
+      | "vegetation"
+      | "road"
+      | "land"
+      | "building"
+      | "none"
+      | "all"
+  ) => void;
+  currentLayer:
+  | "water"
+  | "vegetation"
+  | "road"
+  | "land"
+  | "building"
+  | "none"
+  | "all";
   handleSetWMSURL: (url: string) => void;
   availableLayers: string[];
   handleWMSLayerChange: (layer: string) => void;
   handleSatelliteLayerChange: (layer: string) => void;
   onSetCoordinates: (coordinates: { lat: number; lon: number }) => void;
-  handleToggleGeoServerLayer: () => void; // New prop for toggling GeoServer layer
-  geoServerLayerVisible: boolean; // New prop for layer visibility (optional)
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -33,16 +59,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   handleWMSLayerChange,
   handleSatelliteLayerChange,
   onSetCoordinates,
-  handleToggleGeoServerLayer, // Destructure the new prop
-  geoServerLayerVisible, // Destructure the new prop (optional)
 }) => {
   const [loading, setLoading] = useState(false);
   const [latitude, setLatitude] = useState<string>("");
   const [longitude, setLongitude] = useState<string>("");
   const [activeWMSLayer, setActiveWMSLayer] = useState<string | null>(null);
-  const [activeSatelliteLayer, setActiveSatelliteLayer] = useState<
-    string | null
-  >(null);
+  const [activeSatelliteLayer, setActiveSatelliteLayer] = useState<string | null>(
+    null
+  );
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false); // State for collapse
 
   useEffect(() => {
     const initializeBackend = async () => {
@@ -87,20 +112,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: "road",
       name: "Road Areas",
-      icon: Trees,
-      description: "Show forest coverage and vegetation",
+      icon: FaRoad, // Updated Icon from react-icons
+      description: "Show road networks and infrastructures",
     },
     {
       id: "land",
       name: "Land Areas",
-      icon: Trees,
-      description: "Show forest coverage and vegetation",
+      icon: MapPin,
+      description: "Show land usage and terrain",
     },
     {
       id: "building",
       name: "Building Areas",
-      icon: Trees,
-      description: "Show forest coverage and vegetation",
+      icon: Home,
+      description: "Show building footprints and structures",
     },
     {
       id: "all",
@@ -110,186 +135,210 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: "none",
-      name: "None Layers",
+      name: "None",
       icon: Layers,
-      description: "Show all available layers",
+      description: "Hide all layers",
     },
   ] as const;
 
   return (
-    <div className="h-screen flex flex-col">
-      <div className="flex-1 overflow-y-auto">
-        <div className="space-y-4 p-4">
+    <div
+      className={cn(
+        "h-screen flex flex-col bg-background text-foreground transition-width duration-300",
+        isCollapsed ? "w-20" : "w-[30vw] max-w-lg" // Adjusted width to ~30vw
+      )}
+    >
+      {/* Header with Toggle Button */}
+      <div className="flex items-center justify-between p-4 border-b border-border">
+        {!isCollapsed && <h1 className="text-xl font-bold">Dashboard</h1>}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="text-foreground"
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {isCollapsed ? <ChevronRight /> : <ChevronLeft />}
+        </Button>
+      </div>
+
+      {/* Main Content with Unified Scrolling */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-primary scrollbar-track-background p-4">
+        <div className="space-y-4">
           {/* Layers Section */}
           <div>
-            <h2 className="text-lg font-semibold mb-4">Layers</h2>
+            {!isCollapsed && (
+              <h2 className="text-lg font-semibold mb-4">Layers</h2>
+            )}
             <div className="space-y-1">
               {layers.map((layer) => (
-                <div key={layer.id} className="flex items-center justify-between">
+                <div
+                  key={layer.id}
+                  className="flex items-center justify-between"
+                >
                   <Button
                     onClick={() => onLayerChange(layer.id)}
-                    variant={currentLayer === layer.id ? "default" : "ghost"}
+                    variant={
+                      currentLayer === layer.id ? "default" : "ghost"
+                    }
                     className={cn(
                       "w-full justify-start gap-2",
                       currentLayer === layer.id &&
                       "bg-primary text-primary-foreground"
                     )}
-                    title={`Activate ${layer.description}`}
+                    title={`Activate ${layer.name}`}
                   >
                     <layer.icon
                       className={cn(
-                        "h-4 w-4",
-                        currentLayer === layer.id && "border-2 border-red-500 rounded"
+                        "h-5 w-5 flex-shrink-0",
+                        currentLayer === layer.id &&
+                        "text-accent-foreground"
                       )}
                     />
-                    {layer.name}
+                    {!isCollapsed && (
+                      <span className="flex-1 text-left truncate">
+                        {layer.name}
+                      </span>
+                    )}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      // Trigger download of the GeoJSON file
-                      const downloadLink = document.createElement("a");
-                      downloadLink.href = `/data/${layer.id}.geojson`;
-                      downloadLink.download = `${layer.id}.geojson`;
-                      downloadLink.click();
-                    }}
-                    title={`Download ${layer.name} GeoJSON`}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
+                  {!isCollapsed && layer.id !== "none" && ( // Remove download button for 'none' layer
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        // Trigger download of the GeoJSON file
+                        const downloadLink = document.createElement("a");
+                        downloadLink.href = `/data/${layer.id}.geojson`;
+                        downloadLink.download = `${layer.id}.geojson`;
+                        downloadLink.click();
+                      }}
+                      title={`Download ${layer.name} GeoJSON`}
+                      className="ml-2 flex-shrink-0"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"
-                      />
-                    </svg>
-                  </Button>
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               ))}
-              <Separator className="my-2" />
-              <Button
-                onClick={() => onLayerChange("none")}
-                variant={currentLayer === "none" ? "default" : "ghost"}
-                className="w-full justify-start"
-                title="Clear all layers"
-              >
-                Clear All
-              </Button>
+              {!isCollapsed && (
+                <>
+                  <Separator className="my-2 border-border" />
+                  <Button
+                    onClick={() => onLayerChange("none")}
+                    variant="ghost" // Removed conditional highlight
+                    className="w-full justify-start"
+                    title="Clear all layers"
+                  >
+                    Clear All
+                  </Button>
+                </>
+              )}
             </div>
           </div>
-
 
           {/* Set WMS URL Section */}
-          <div>
-            <h2 className="text-lg font-semibold mb-2">Set WMS URL</h2>
-            <div className="flex flex-col gap-2">
-              <input
-                type="text"
-                placeholder="Paste WMS URL here..."
-                className="w-full border rounded-md p-2 bg-secondary/50"
-                onChange={(e) => handleSetWMSURL(e.target.value)}
-              />
+          {!isCollapsed && (
+            <div>
+              <h2 className="text-lg font-semibold mb-2">Set WMS URL</h2>
+              <div className="flex flex-col gap-2">
+                <input
+                  type="text"
+                  placeholder="Paste WMS URL here..."
+                  className="w-full border rounded-md p-2 bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary-foreground"
+                  onChange={(e) => handleSetWMSURL(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Jump to Coordinates Section */}
-          <div className="w-fit">
-            <h2 className="text-lg font-semibold mb-2">Jump to Coordinates</h2>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="Latitude"
-                className="flex-1 border rounded-md p-2 bg-secondary/50 w-36"
-                value={latitude}
-                onChange={(e) => setLatitude(e.target.value)}
-              />
-              <input
-                type="text"
-                placeholder="Longitude"
-                className="flex-1 border rounded-md p-2 bg-secondary/50 w-36"
-                value={longitude}
-                onChange={(e) => setLongitude(e.target.value)}
-              />
-              <Button
-                onClick={handleGoClick}
-                className="bg-primary text-primary-foreground px-6"
-              >
-                Go
-              </Button>
+          {!isCollapsed && (
+            <div>
+              <h2 className="text-lg font-semibold mb-2">Jump to Coordinates</h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="text"
+                  placeholder="Latitude"
+                  className="flex-1 min-w-[100px] border rounded-md p-2 bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary-foreground"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                />
+                <input
+                  type="text"
+                  placeholder="Longitude"
+                  className="flex-1 min-w-[100px] border rounded-md p-2 bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary-foreground"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                />
+                <Button
+                  onClick={handleGoClick}
+                  className="bg-primary text-primary-foreground px-4 min-w-[60px]"
+                >
+                  Go
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Available Layers Section */}
-          <div>
-            <h2 className="text-lg font-semibold mb-2">Available Layers</h2>
-            {availableLayers.length > 0 ? (
-              <div className="space-y-2 h-72 overflow-y-scroll">
-                {availableLayers.map((layer, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between bg-secondary/50 p-2 rounded-lg"
-                  >
-                    <span className="flex-grow font-medium">{layer}</span>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setActiveWMSLayer(layer);
-                          handleWMSLayerChange(layer);
-                        }}
-                        title="Set layer to view"
-                      >
-                        <Globe2
-                          color={`${activeWMSLayer === layer ? "green" : "white"
-                            }`}
-                          className="h-4 w-4"
-                        />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setActiveSatelliteLayer(layer);
-                          handleSatelliteLayerChange(layer);
-                        }}
-                        title="Set layer for satellite segmentation"
-                      >
-                        <Satellite
-                          color={`${activeSatelliteLayer === layer ? "green" : "white"
-                            }`}
-                          className="h-4 w-4"
-                        />
-                      </Button>
+          {!isCollapsed && (
+            <div>
+              <h2 className="text-lg font-semibold mb-2">Available Layers</h2>
+              {availableLayers.length > 0 ? (
+                <div className="space-y-2">
+                  {availableLayers.map((layer, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between bg-input p-2 rounded-lg"
+                    >
+                      <span className="flex-grow font-medium truncate">
+                        {layer}
+                      </span>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setActiveWMSLayer(layer);
+                            handleWMSLayerChange(layer);
+                          }}
+                          title="Set layer to view"
+                        >
+                          <Globe2
+                            color={`${activeWMSLayer === layer
+                                ? "hsl(var(--accent))"
+                                : "hsl(var(--foreground))"
+                              }`}
+                            className="h-4 w-4"
+                          />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setActiveSatelliteLayer(layer);
+                            handleSatelliteLayerChange(layer);
+                          }}
+                          title="Set layer for satellite segmentation"
+                        >
+                          <Satellite
+                            color={`${activeSatelliteLayer === layer
+                                ? "hsl(var(--accent))"
+                                : "hsl(var(--foreground))"
+                              }`}
+                            className="h-4 w-4"
+                          />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground">No layers available</p>
-            )}
-          </div>
-
-          {/* GeoServer Layer Toggle Section */}
-          <div>
-            <h2 className="text-lg font-semibold mb-2">GeoServer Layer</h2>
-            <Button
-              onClick={handleToggleGeoServerLayer}
-              className="w-full justify-start gap-2"
-              variant="ghost"
-              title="Toggle GeoServer Image Mosaic Layer"
-            >
-              <Globe2 className="h-4 w-4" />
-              {geoServerLayerVisible ? "Hide" : "Show"} GeoServer Layer
-            </Button>
-          </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground">No layers available</p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
