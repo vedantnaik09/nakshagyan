@@ -307,7 +307,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         >
                           <Globe2
                             color={`${activeWMSLayer === layer
-                                ? "hsl(var(--accent))"
+                                ? "green"
                                 : "hsl(var(--foreground))"
                               }`}
                             className="h-4 w-4"
@@ -324,7 +324,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         >
                           <Satellite
                             color={`${activeSatelliteLayer === layer
-                                ? "hsl(var(--accent))"
+                                ? "green"
                                 : "hsl(var(--foreground))"
                               }`}
                             className="h-4 w-4"
