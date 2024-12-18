@@ -562,7 +562,7 @@ const Map: React.FC = () => {
         // GeoServer Image Mosaic Layer
       ],
       view: new View({
-        center: epsg4326toEpsg3857([55, 25]), // Dubai coordinates
+        center: epsg4326toEpsg3857([54.535945918788734, 24.52904002695162 ]), // Dubai coordinates
         zoom: 3,
         minZoom: 0,
         maxZoom: 20,
