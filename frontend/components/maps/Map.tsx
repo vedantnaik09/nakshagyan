@@ -1,5 +1,4 @@
 // Map.tsx
-
 "use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
@@ -8,25 +7,20 @@ import TileLayer from "ol/layer/Tile";
 import ImageLayer from "ol/layer/Image";
 import TileWMS from "ol/source/TileWMS";
 import ImageStatic from "ol/source/ImageStatic";
-import { transformExtent } from "ol/proj";
+import { transformExtent, transform } from "ol/proj";
 import "ol/ol.css";
 import { PiRectangleDashed } from "react-icons/pi";
 import { Sidebar } from "../Sidebar";
-import {
-  reducePrecision,
-  epsg4326toEpsg3857,
-  epsg3875toEpsg4326,
-} from "../../lib/utils";
+import { epsg4326toEpsg3857 } from "../../lib/utils";
 import Loading from '@/components/Loading/Loading';
 
-// Import GeoJSON Format and Vector Layers
 import { GeoJSON } from "ol/format";
 import VectorSource from "ol/source/Vector";
 import VectorLayer from "ol/layer/Vector";
 import { Fill, Stroke, Style } from "ol/style";
 import { applyONNXSegmentation, colorDictRgb } from "../model/Model";
+import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
 
-// Import ShadCN UI components
 import {
   Dialog,
   DialogContent,
@@ -37,9 +31,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { uploadImagesForRun } from "@/lib/uploadImages";
-import { Geometry, GeoJsonProperties } from "geojson";
+import { Feature } from "ol";
+import { Polygon } from "ol/geom";
+import * as turf from "@turf/turf"; // For point-in-polygon checks
 
-// Define the SegmentedImages type matching the model.ts callback
 type SegmentedImages = {
   segmentedImage: string;
   masks: {
@@ -52,57 +47,35 @@ type SegmentedImages = {
 };
 
 const Map: React.FC = () => {
-  const base64 = JSON.parse(localStorage.getItem("base64") || "{}");
   const [isLoading, setIsLoading] = useState(false);
-  // Existing state variables
   const [wmsURL, setWMSURL] = useState<string>(
     `https://services.sentinel-hub.com/ogc/wms/${process.env.NEXT_PUBLIC_SENTINEL_INSTANCE_ID}?`
   );
   const [wmsLayer, setWMSLayer] = useState<string>("1_TRUE-COLOR-L1C");
-  const [satelliteLayer, setSatelliteLayer] =
-    useState<string>("1_TRUE-COLOR-L1C");
+  const [satelliteLayer, setSatelliteLayer] = useState<string>("1_TRUE-COLOR-L1C");
   const satelliteLayerRef = useRef<string>("1_TRUE-COLOR-L1C");
   const [layers, setLayers] = useState<string[]>([]);
-  const [rectangleToolActive, setRectangleToolActive] =
-    useState<boolean>(false);
+  const [rectangleToolActive, setRectangleToolActive] = useState<boolean>(false);
   const [modalReload, setModalReload] = useState(false);
-  const [geoJSONData, setGeoJSONData] = useState<GeoJSON.GeoJSON | null>(null); // Initialize without GeoJSON
-  // **New State Variable for Current Layer**
+
+  const [geoJSONData, setGeoJSONData] = useState<GeoJSON.GeoJSON | null>(null);
   const [currentLayer, setCurrentLayer] = useState<"water" | "vegetation" | "road" | "land" | "building" | "none" | "all">("none");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  // GeoServer Image Mosaic Layer details
-  // const geoServerWMSURL = `http://${process.env.NEXT_PUBLIC_GEOSERVER_IP}:8080/geoserver/ne/wms`; // Base WMS URL
-  const geoServerLayerName = `ne:tiff`; // Layer name
-  const geoServerWMSVersion = `1.3.0`; // Updated to 1.3.0 for consistency
-  const geoServerFormat = `image/png`; // Use 'image/png' for compatibility
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapObjRef = useRef<OlMap | null>(null);
 
-  // Custom selection state
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
   const [startPixel, setStartPixel] = useState<[number, number] | null>(null);
-  const [currentPixel, setCurrentPixel] = useState<[number, number] | null>(
-    null
-  );
+  const [currentPixel, setCurrentPixel] = useState<[number, number] | null>(null);
   const selectionBoxRef = useRef<HTMLDivElement | null>(null);
 
-  // New state variables for modal
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  // Remove the selectedImage state
-  // const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedMask, setSelectedMask] = useState<string | null>(null);
-  const [selectedExtent, setSelectedExtent] = useState<
-    [number, number, number, number] | null
-  >(null);
+  const [selectedExtent, setSelectedExtent] = useState<[number, number, number, number] | null>(null);
 
-  // Additional state for handling clicks and highlights
   const [highlightedClass, setHighlightedClass] = useState<number | null>(null);
-  const [originalTileImage, setOriginalTileImage] = useState<string | null>(
-    null
-  );
-  // State to track GeoServer layer visibility
-  const [geoServerLayerVisible, setGeoServerLayerVisible] =
-    useState<boolean>(true);
+  const [originalTileImage, setOriginalTileImage] = useState<string | null>(null);
+
   const [currentImages, setCurrentImages] = useState<SegmentedImages>({
     segmentedImage: "",
     masks: {
@@ -113,53 +86,47 @@ const Map: React.FC = () => {
       building: "",
     },
   });
-
-  // **New State for Mask Image Overlay**
   const [maskImage, setMaskImage] = useState<string | null>(null);
-
-  // **Create a ref for the selected image**
   const selectedImageRef = useRef<HTMLImageElement | null>(null);
 
-  // **Create a ref to store the segmented image data**
-  const segmentedImageDataRef = useRef<string | null>(null);
+  // Store each class's GeoJSON data
+  const [classGeoData, setClassGeoData] = useState<{
+    [key: string]: GeoJSON.GeoJSON | null;
+  }>({
+    water: null,
+    land: null,
+    vegetation: null,
+    road: null,
+    building: null,
+  });
 
-  // **Handler Function to Handle Image Clicks**
+  const classes = ["water", "land", "vegetation", "road", "building"] as const;
+
   const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
     if (!currentImages.segmentedImage) return;
-
     const img = e.currentTarget;
 
-    // Get the natural (actual) dimensions
     const naturalWidth = img.naturalWidth;
     const naturalHeight = img.naturalHeight;
-
-    // Get the displayed dimensions
     const displayedWidth = img.clientWidth;
     const displayedHeight = img.clientHeight;
 
-    // Calculate scaling factors
     const scaleX = naturalWidth / displayedWidth;
     const scaleY = naturalHeight / displayedHeight;
 
-    // Get click coordinates relative to the image
     const rect = img.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Map to natural coordinates
     const pixelX = Math.floor(x * scaleX);
     const pixelY = Math.floor(y * scaleY);
 
-    console.log({ pixelX, pixelY });
-
-    // Create a temporary canvas to get pixel data from the SEGMENTED image
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = naturalWidth;
     tempCanvas.height = naturalHeight;
     const ctx = tempCanvas.getContext("2d");
     if (!ctx) return;
 
-    // Draw the SEGMENTED image onto the canvas
     const tempImage = new Image();
     tempImage.src = currentImages.segmentedImage;
     tempImage.crossOrigin = "Anonymous";
@@ -168,7 +135,6 @@ const Map: React.FC = () => {
       const pixel = ctx.getImageData(pixelX, pixelY, 1, 1).data;
       const [r, g, b, a] = pixel;
 
-      // Map the color to the class index based on colorDictRgb
       const classIndex = Object.keys(colorDictRgb).find(
         (key) =>
           colorDictRgb[key as keyof typeof colorDictRgb][0] === b &&
@@ -186,75 +152,39 @@ const Map: React.FC = () => {
         4: "building",
       };
 
-      console.log(
-        "Clicked on pixel with RGB:",
-        r,
-        g,
-        b,
-        "Class Index:",
-        classIndex
-      );
-
-      // Only proceed if classIndex is found
       if (classIndex !== undefined) {
         const classKey = classIdxToString[Number(classIndex)];
-
-        console.log(`Class Key: ${classKey}`);
-
-        // Highlight features on the map based on the class
-        highlightFeatures(Number(classIndex));
-
         setHighlightedClass(Number(classIndex));
-
-        // Dynamically set the mask image based on the clicked class
         if (currentImages.masks[classKey]) {
           setMaskImage(currentImages.masks[classKey] as string);
         }
-      } else {
-        console.log("Clicked on an undefined class.");
+        highlightFeatures(Number(classIndex));
       }
-
-      // // Reload the modal to reflect the changes
-      // setModalReload(false);
-      // setTimeout(() => {
-      //   setModalReload(true);
-      // }, 10);
     };
   };
 
-  // Function to highlight all features of a specific class
   const highlightFeatures = (classId: number) => {
-    if (!selectedExtent) return;
+    if (!selectedExtent || !currentImages.segmentedImage) return;
 
-    // Create a mask for the selected class
     const maskCanvas = document.createElement("canvas");
-    maskCanvas.width = 1536; // Ensure this matches the tile size
+    maskCanvas.width = 1536;
     maskCanvas.height = 1536;
     const ctx = maskCanvas.getContext("2d");
     if (!ctx) return;
 
-    // Draw the segmented image onto the canvas
     const segmentedImage = new Image();
     segmentedImage.src = currentImages.segmentedImage!;
     segmentedImage.crossOrigin = "Anonymous";
     segmentedImage.onload = () => {
       ctx.drawImage(segmentedImage, 0, 0, maskCanvas.width, maskCanvas.height);
-      const imageData = ctx.getImageData(
-        0,
-        0,
-        maskCanvas.width,
-        maskCanvas.height
-      );
+      const imageData = ctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
       const data = imageData.data;
 
-      // Iterate through each pixel and highlight the selected class
       for (let i = 0; i < data.length; i += 4) {
         const r = data[i];
         const g = data[i + 1];
         const b = data[i + 2];
-        const a = data[i + 3];
 
-        // Compare with colorDictRgb to find the matching class
         let currentClassId: number | undefined = undefined;
         for (const [key, color] of Object.entries(colorDictRgb)) {
           if (color[0] === r && color[1] === g && color[2] === b) {
@@ -264,26 +194,20 @@ const Map: React.FC = () => {
         }
 
         if (currentClassId === classId) {
-          // Highlight by setting a semi-transparent color (e.g., red)
-          data[i + 2] = 255; // R
-          data[i + 1] = 0; // G
-          data[i] = 0; // B
-          // data[i + 3] = 150; // Alpha
+          data[i] = 255;
+          data[i + 1] = 0;
+          data[i + 2] = 0;
         } else {
-          // Make other areas transparent
           data[i + 3] = 0;
         }
       }
 
-      // Put the modified data back onto the canvas
       ctx.putImageData(imageData, 0, 0);
       const highlightedMaskURL = maskCanvas.toDataURL("image/png");
 
-      // Overlay the highlighted mask on the map
       const map = mapObjRef.current;
       if (!map) return;
 
-      // Remove existing highlight layer if any
       const existingHighlightLayer = map
         .getLayers()
         .getArray()
@@ -292,32 +216,19 @@ const Map: React.FC = () => {
         map.removeLayer(existingHighlightLayer);
       }
 
-      // Create a new Image layer for the highlighted mask
       const imageLayer = new ImageLayer({
         source: new ImageStatic({
           url: highlightedMaskURL,
           projection: "EPSG:3857",
-          imageExtent: transformExtent(
-            selectedExtent,
-            "EPSG:3857",
-            "EPSG:3857"
-          ), // Ensure consistency
+          imageExtent: transformExtent(selectedExtent, "EPSG:4326", "EPSG:3857"),
         }),
         opacity: 0.6,
       });
-
-      // Assign a name to the layer using the `set` method
       imageLayer.set("name", "highlight");
-
-      // Add the layer to the map
       map.addLayer(imageLayer);
     };
   };
 
-  useEffect(() => {
-    console.log(selectedImage);
-  }, [selectedImage]);
-  // Fetch WMS capabilities
   const fetchCapabilities = async (url: string) => {
     try {
       const response = await fetch(`${url}service=WMS&request=GetCapabilities`);
@@ -340,44 +251,33 @@ const Map: React.FC = () => {
     }
   };
 
-  // Set coordinates on the map
-  const handleSetCoordinates = useCallback(
-    (coordinates: { lat: number; lon: number }) => {
-      if (mapObjRef.current) {
-        const view = mapObjRef.current.getView();
-        const transformedCoords = epsg4326toEpsg3857([
-          coordinates.lat,
-          coordinates.lon,
-        ]);
-        view.setCenter(transformedCoords);
-      }
-    },
-    []
-  );
+  const handleSetCoordinates = useCallback((coordinates: { lat: number; lon: number }) => {
+    if (mapObjRef.current) {
+      const view = mapObjRef.current.getView();
+      const transformedCoords = epsg4326toEpsg3857([coordinates.lat, coordinates.lon]);
+      view.setCenter(transformedCoords);
+    }
+  }, []);
 
-  // Handle segmented image and masks
   const handleSegmentedImageReady = (images: SegmentedImages) => {
     const { segmentedImage, masks } = images;
     if (segmentedImage && masks.water) {
-      // Store segmented images for later use
       setCurrentImages(images);
       setSelectedMask(masks.water);
       setMaskImage(null);
 
-      // Preload the image
       const tempImg = new Image();
       tempImg.src = segmentedImage;
       tempImg.onload = () => {
         if (selectedImageRef.current) {
           selectedImageRef.current.src = segmentedImage;
         }
-        // Now, open the modal after the image is loaded
         setIsModalOpen(true);
-        setIsLoading(false); // Only hide loading when modal is ready to show
+        setIsLoading(false);
       };
       tempImg.onerror = (err) => {
         console.error("Failed to load the segmented image:", err);
-        setIsLoading(false); // Hide loading on error
+        setIsLoading(false);
         toast.error("Failed to load segmented image");
       };
     } else {
@@ -387,17 +287,13 @@ const Map: React.FC = () => {
     }
   };
 
-
-  // **Handler Function to Change Layers**
   const onLayerChange = async (
     type: "water" | "vegetation" | "road" | "land" | "building" | "none" | "all"
   ) => {
     setCurrentLayer(type);
-
     const map = mapObjRef.current;
     if (!map) return;
 
-    // Remove existing segmented layers
     const layersToRemove = map
       .getLayers()
       .getArray()
@@ -406,38 +302,27 @@ const Map: React.FC = () => {
           layer.get("name")
         )
       );
-
     layersToRemove.forEach((layer) => map.removeLayer(layer));
 
     if (type === "none") {
-      console.log("All segmented layers removed.");
       return;
     }
 
     try {
-      // Fetch the GeoJSON data for the selected layer type
-      console.log(type)
-      const result = await fetchGeoJSON(type);
-
-      console.log(`Adding layer for ${type}`);
-      if (!geoJSONData) {
-        console.log("No   geoJSONData")
-      }
-      addGeoJSONToMap(geoJSONData!);
-
-      // Add a name property to the layer for later identification
-      const mapLayers = map.getLayers().getArray();
-      const addedLayer = mapLayers[mapLayers.length - 1];
-      if (addedLayer instanceof VectorLayer) {
-        addedLayer.set("name", `${type}Layer`);
+      await fetchGeoJSON(type);
+      if (geoJSONData) {
+        addGeoJSONToMap(geoJSONData);
+        const mapLayers = map.getLayers().getArray();
+        const addedLayer = mapLayers[mapLayers.length - 1];
+        if (addedLayer instanceof VectorLayer) {
+          addedLayer.set("name", `${type}Layer`);
+        }
       }
     } catch (error) {
       console.error(`Failed to fetch or add layer for ${type}:`, error);
     }
   };
 
-
-  // **Handler Function to Set WMS URL**
   const handleSetWMSURL = (url: string) => {
     setWMSURL(url);
     const map = mapObjRef.current;
@@ -445,20 +330,20 @@ const Map: React.FC = () => {
       const sentinelWMSLayer = map
         .getLayers()
         .getArray()
-        .find(
-          (layerObj) => layerObj.get("name") === "sentinelWMSLayer"
-        ) as TileLayer<TileWMS> | undefined;
+        .find((layerObj) => layerObj.get("name") === "sentinelWMSLayer") as
+        | TileLayer<TileWMS>
+        | undefined;
 
       if (sentinelWMSLayer) {
         const source = sentinelWMSLayer.getSource();
         if (source) {
           source.setUrl(url);
-          source.updateParams({}); // Force update
+          source.updateParams({});
         }
       }
     }
   };
-  // **Handler Functions for WMS and Satellite Layer Changes**
+
   const handleWMSLayerChange = (layer: string) => {
     setWMSLayer(layer);
     const map = mapObjRef.current;
@@ -466,9 +351,9 @@ const Map: React.FC = () => {
       const sentinelWMSLayer = map
         .getLayers()
         .getArray()
-        .find(
-          (layerObj) => layerObj.get("name") === "sentinelWMSLayer"
-        ) as TileLayer<TileWMS> | undefined;
+        .find((layerObj) => layerObj.get("name") === "sentinelWMSLayer") as
+        | TileLayer<TileWMS>
+        | undefined;
 
       if (sentinelWMSLayer) {
         sentinelWMSLayer.getSource()?.updateParams({ LAYERS: layer });
@@ -479,118 +364,8 @@ const Map: React.FC = () => {
   const handleSatelliteLayerChange = (layer: string) => {
     setSatelliteLayer(layer);
     satelliteLayerRef.current = layer;
-    // Update satellite layer's layer name if needed
-    // It depends on how satellite layers are managed
   };
 
-  // **Handler Function to Toggle GeoServer Layer Visibility**
-  const toggleGeoServerLayer = () => {
-    const map = mapObjRef.current;
-    if (!map) {
-      console.error("Map not initialized");
-      return;
-    }
-
-    const geoServerLayer = map
-      .getLayers()
-      .getArray()
-      .find(
-        (layer) => layer.get("name") === "geoServerImageMosaic"
-      ) as TileLayer<TileWMS> | undefined;
-
-    if (!geoServerLayer) {
-      console.error("GeoServer Image Mosaic Layer not found.");
-      // Log all current layers for debugging
-      map.getLayers().getArray().forEach((layer, index) => {
-        console.log(`Layer ${index}:`, layer.get("name"));
-      });
-      return;
-    }
-
-    const newVisibility = !geoServerLayer.getVisible();
-    geoServerLayer.setVisible(newVisibility);
-    setGeoServerLayerVisible(newVisibility);
-    console.log(
-      `GeoServer Image Mosaic Layer is now ${newVisibility ? "visible" : "hidden"
-      }.`
-    );
-  };
-
-  const fetchGeoJSON = async (filename: string,) => {
-    try {
-      const response = await fetch("/data/" + filename + ".geojson");
-      console.log(response)
-      if (!response.ok) throw new Error("Failed to fetch GeoJSON data.");
-      const data: GeoJSON.GeoJSON = await response.json();
-      console.log(data)
-      setGeoJSONData(data);
-      console.log("GeoJSON data loaded successfully.");
-    } catch (error) {
-      console.error("Error fetching GeoJSON:", error);
-      toast.error("Failed to load GeoJSON data.", {
-        theme: "dark",
-        hideProgressBar: true,
-        autoClose: 2000,
-      });
-    }
-  };
-
-
-  // Initialize map and fetch capabilities
-  useEffect(() => {
-    if (!mapRef.current) return;
-
-    // Initialize OpenLayers map
-    const map = new OlMap({
-      target: mapRef.current!,
-      layers: [
-        // Sentinel Hub WMS Layer
-        new TileLayer({
-          source: new TileWMS({
-            url: wmsURL,
-            params: {
-              LAYERS: wmsLayer, // Initially "1_TRUE-COLOR-L1C"
-              FORMAT: "image/png",
-              TRANSPARENT: true,
-              VERSION: "1.3.0",
-            },
-            serverType: "geoserver",
-            crossOrigin: "anonymous", // Handle CORS if necessary
-          }),
-          properties: { name: "sentinelWMSLayer" }, // Assign a unique name
-        }),
-        // GeoServer Image Mosaic Layer
-      ],
-      view: new View({
-        center: epsg4326toEpsg3857([54.535945918788734, 24.52904002695162 ]), // Dubai coordinates
-        zoom: 3,
-        minZoom: 0,
-        maxZoom: 20,
-        maxResolution: 200,
-      }),
-    });
-
-    // Reference the map object
-    mapObjRef.current = map;
-
-    // Fetch capabilities for existing WMS URL
-    if (wmsURL) {
-      fetchCapabilities(wmsURL);
-    }
-
-    return () => {
-      map.setTarget(undefined);
-    };
-  }, [
-    wmsURL,
-    wmsLayer,
-    geoServerLayerName,
-    geoServerWMSVersion,
-    geoServerFormat,
-    geoServerLayerVisible,
-  ]);
-
-  // Toggle rectangle drawing tool
   const toggleRectangleTool = () => {
     const newState = !rectangleToolActive;
     setRectangleToolActive(newState);
@@ -604,7 +379,6 @@ const Map: React.FC = () => {
     }
   };
 
-  // Utility function to get mouse position relative to the map container
   const getRelativePosition = (e: React.MouseEvent): [number, number] => {
     if (!mapRef.current) return [0, 0];
     const rect = mapRef.current.getBoundingClientRect();
@@ -613,11 +387,8 @@ const Map: React.FC = () => {
     return [x, y];
   };
 
-  // Mouse event handlers for custom box
   const onMouseDown = (e: React.MouseEvent) => {
     if (!rectangleToolActive) return;
-
-    // Require ctrl key if desired (similar to platformModifierKeyOnly)
     if (!e.ctrlKey) return;
 
     setIsDrawing(true);
@@ -643,7 +414,6 @@ const Map: React.FC = () => {
     const dy = y - startPixel[1];
     const side = Math.max(Math.abs(dx), Math.abs(dy));
 
-    // Determine top-left corner for the square
     const left = dx < 0 ? startPixel[0] - side : startPixel[0];
     const top = dy < 0 ? startPixel[1] - side : startPixel[1];
 
@@ -691,8 +461,41 @@ const Map: React.FC = () => {
     const topLeft = { lat: wMaxY, lon: wMinX };
     const bottomRight = { lat: wMinY, lon: wMaxX };
 
-    // **Set the selectedExtent state**
     setSelectedExtent([wMinX, wMinY, wMaxX, wMaxY]);
+
+    const polygonCoordinates = [
+      [
+        [wMinX, wMaxY],
+        [wMaxX, wMaxY],
+        [wMaxX, wMinY],
+        [wMinX, wMinY],
+        [wMinX, wMaxY],
+      ],
+    ];
+    const polygonFeature = new Feature({
+      geometry: new Polygon(polygonCoordinates),
+    });
+    const polygonStyle = new Style({
+      stroke: new Stroke({
+        color: 'rgba(255, 255, 0, 1)',
+        width: 2,
+      }),
+      fill: new Fill({
+        color: 'rgba(255, 255, 0, 0.2)',
+      }),
+    });
+    const polygonSource = new VectorSource({
+      features: [polygonFeature],
+    });
+    const polygonLayer = new VectorLayer({
+      source: polygonSource,
+      style: polygonStyle,
+      properties: { name: "selectionPolygon" },
+    });
+
+    const oldLayer = map.getLayers().getArray().find(l => l.get('name') === 'selectionPolygon');
+    if (oldLayer) map.removeLayer(oldLayer);
+    map.addLayer(polygonLayer);
 
     const width = 1536;
     const height = 1536;
@@ -712,8 +515,7 @@ const Map: React.FC = () => {
     });
 
     const tileURL = `${wmsURL}&${params.toString()}`;
-    console.log("Fetching tile from:", tileURL);
-    setIsLoading(true);  // Start loading animation
+    setIsLoading(true);
 
     try {
       const response = await fetch(tileURL);
@@ -723,22 +525,14 @@ const Map: React.FC = () => {
       const blob = await response.blob();
       const objectURL = URL.createObjectURL(blob);
 
-      // Store the original tile image URL
       setOriginalTileImage(objectURL);
-      const folderName = `Run_${new Date()
-        .toISOString()
-        .replace(/[:.]/g, "_")}`;
-
-      // Upload tile image to Cloudinary
+      const folderName = `Run_${new Date().toISOString().replace(/[:.]/g, "_")}`;
       const tileBase64 = await blobToBase64(blob);
       await uploadImagesForRun(tileBase64, null, folderName, "tile.png");
 
       const image = new Image();
       image.src = objectURL;
       image.onload = () => {
-        console.log("Tile image loaded.");
-
-        // Pass the folder name to applyONNXSegmentation
         applyONNXSegmentation(
           "/models/model.onnx",
           image,
@@ -746,17 +540,14 @@ const Map: React.FC = () => {
           document.createElement("canvas"),
           folderName,
           topLeft,
-          bottomRight,
+          bottomRight
         );
       };
-
-      // setIsLoading(false);  // Hide loading animation after process is done
     } catch (error) {
       console.error("Error fetching tile:", error);
-      setIsLoading(false);  // Hide loading animation on error
+      setIsLoading(false);
     }
   };
-
 
   const blobToBase64 = (blob: Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -767,83 +558,22 @@ const Map: React.FC = () => {
     });
   };
 
-
-  // Function to highlight water bodies (existing functionality)
-  const highlightWaterBodies = () => {
-    if (!selectedMask || !selectedExtent) return;
-
-    const img = new Image();
-    img.src = selectedMask;
-    img.crossOrigin = "Anonymous"; // Handle CORS if necessary
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-
-      // Example: Assume water is represented by a specific color, e.g., blue (0, 0, 255)
-      // Adjust the condition based on your mask's encoding for water
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        // Example condition: Water pixels are pure blue
-        if (r === 0 && g === 0 && b === 255) {
-          // Highlight water by changing color or adding transparency
-          data[i + 2] = 255; // R
-          data[i + 1] = 0; // G
-          data[i] = 0; // B
-          // data[i + 3] = 150; // Alpha
-        } else {
-          // Make non-water areas transparent
-          data[i + 3] = 0;
-        }
-      }
-
-      ctx.putImageData(imageData, 0, 0);
-      const highlightedMaskURL = canvas.toDataURL("image/png");
-
-      // **Overlay the Highlighted Mask on the Map**
-      const map = mapObjRef.current;
-      if (!map) return;
-
-      // Remove existing highlight layer if any
-      const existingHighlightLayer = map
-        .getLayers()
-        .getArray()
-        .find((layer) => layer.get("name") === "highlight");
-      if (existingHighlightLayer) {
-        map.removeLayer(existingHighlightLayer);
-      }
-
-      // Create a new Image layer for the highlighted mask
-      const imageLayer = new ImageLayer({
-        source: new ImageStatic({
-          url: highlightedMaskURL,
-          projection: "EPSG:3857",
-          imageExtent: transformExtent(
-            selectedExtent,
-            "EPSG:3857",
-            "EPSG:3857"
-          ), // Ensure consistency
-        }),
-        opacity: 0.6,
+  const fetchGeoJSON = async (filename: string) => {
+    try {
+      const response = await fetch("/data/" + filename + ".geojson");
+      if (!response.ok) throw new Error("Failed to fetch GeoJSON data.");
+      const data: GeoJSON.GeoJSON = await response.json();
+      setGeoJSONData(data);
+    } catch (error) {
+      console.error("Error fetching GeoJSON:", error);
+      toast.error("Failed to load GeoJSON data.", {
+        theme: "dark",
+        hideProgressBar: true,
+        autoClose: 2000,
       });
-
-      // Assign a name to the layer using the `set` method
-      imageLayer.set("name", "highlight");
-
-      // Add the layer to the map
-      map.addLayer(imageLayer);
-    };
+    }
   };
 
-  // **Function to Add GeoJSON Layer to Map**
   const addGeoJSONToMap = (geojson: GeoJSON.GeoJSON) => {
     const map = mapObjRef.current;
     if (!map) {
@@ -851,92 +581,204 @@ const Map: React.FC = () => {
       return;
     }
 
-
-    // **Check if Layer Already Exists**
     const existingLayers = map.getLayers().getArray();
-
     existingLayers.forEach((layer) => {
-      if (layer instanceof VectorLayer) {
+      if (layer instanceof VectorLayer && layer.get("name") === "geoJSONLayer") {
         map.removeLayer(layer);
-        console.log("Layer name:", layer.get("name"));
       }
     });
 
-
-    // .find(
-    //   (layer) => layer.get("name") === "geoJSONLayer"
-    // ) as VectorLayer<VectorSource> | undefined;
-
-    // console.log("Existing Layer:", existingLayer);
-    // if (existingLayer!) {
-    //   console.log("GeoJSON layer already exists on the map, will remove it and add another");
-    //   // map.removeLayer(existingLayer);
-    //   // return;
-    // }
-    console.log("Hello world");
-    // **Create Vector Source from GeoJSON**
     const vectorSource = new VectorSource({
       features: new GeoJSON().readFeatures(geojson, {
-        featureProjection: "EPSG:3857", // Ensure projection matches the map's
+        featureProjection: "EPSG:3857",
       }),
     });
 
-    // **Define Custom Style**
     const vectorStyle = new Style({
       fill: new Fill({
-        color: "rgba(0, 128, 0, 0.5)", // Semi-transparent green
+        color: "rgba(0, 128, 0, 0.5)",
       }),
       stroke: new Stroke({
-        color: "#008000", // Green border
+        color: "#008000",
         width: 2,
       }),
     });
 
-    // **Create Vector Layer**
     const vectorLayer = new VectorLayer({
       source: vectorSource,
       style: vectorStyle,
     });
-
-    // Set the name property after creating the layer
     vectorLayer.set("name", "geoJSONLayer");
-
-    // **Add Layer to Map**
     map.addLayer(vectorLayer);
-    console.log("GeoJSON layer added to the map.");
   };
-  // **Handler for "View in Map" Button**
-  const handleViewInMap = (filename: string) => {
-    if (!geoJSONData) {
-      try {
-        fetchGeoJSON(filename);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = new OlMap({
+      target: mapRef.current!,
+      layers: [
+        new TileLayer({
+          source: new TileWMS({
+            url: wmsURL,
+            params: {
+              LAYERS: wmsLayer,
+              FORMAT: "image/png",
+              TRANSPARENT: true,
+              VERSION: "1.3.0",
+            },
+            serverType: "geoserver",
+            crossOrigin: "anonymous",
+          }),
+          properties: { name: "sentinelWMSLayer" },
+        }),
+      ],
+      view: new View({
+        center: epsg4326toEpsg3857([54.535945918788734, 24.52904002695162]),
+        zoom: 3,
+        minZoom: 0,
+        maxZoom: 20,
+        maxResolution: 200,
+      }),
+    });
+
+    mapObjRef.current = map;
+
+    if (wmsURL) {
+      fetchCapabilities(wmsURL);
+    }
+
+    return () => {
+      map.setTarget(undefined);
+    };
+  }, [wmsURL, wmsLayer]);
+
+  // Preload geojson data for each class once
+  useEffect(() => {
+    const loadAllClassGeoData = async () => {
+      for (const cls of classes) {
+        if (!classGeoData[cls]) {
+          try {
+            const response = await fetch(`/data/${cls}.geojson`);
+            if (response.ok) {
+              const data = await response.json();
+              setClassGeoData((prev) => ({ ...prev, [cls]: data }));
+            }
+          } catch (err) {
+            console.error(`Error loading ${cls}.geojson`, err);
+          }
+        }
       }
-      catch {
-        console.error("No GeoJSON data available to add to the map.");
-        toast.error("No GeoJSON data available.", {
+    };
+    loadAllClassGeoData();
+  }, []);
+
+  // On map click - check which polygon the point falls into
+  useEffect(() => {
+    const map = mapObjRef.current;
+    if (!map) return;
+
+    const handleMapClick = async (evt: any) => {
+      setIsLoading(true);
+
+      const coordinate4326 = transform(evt.coordinate, 'EPSG:3857', 'EPSG:4326');
+      if (!coordinate4326) {
+        setIsLoading(false);
+        return;
+      }
+
+      const point = turf.point(coordinate4326);
+      let foundFeatureClass: string | null = null;
+      let foundFeature: GeoJSON.Feature<GeoJSON.Geometry> | null = null;
+
+      // Check each class's geojson to see if point is inside
+      for (const cls of classes) {
+        const geoData = classGeoData[cls];
+        if (!geoData) continue;
+
+        if (geoData.type === "FeatureCollection") {
+          for (const feature of geoData.features) {
+            if (feature.geometry && booleanPointInPolygon(point, feature as any)) {
+              foundFeatureClass = cls;
+              foundFeature = feature;
+              break;
+            }
+          }
+        }
+
+        if (foundFeatureClass) break;
+      }
+
+      if (foundFeature && foundFeatureClass) {
+        // Plot the entire class's GeoJSON on the map
+        const classData = classGeoData[foundFeatureClass];
+        if (classData) {
+          addGeoJSONToMap(classData);
+        }
+
+        highlightPolygonFeature(foundFeature);
+        toast.success(`Clicked inside a ${foundFeatureClass} polygon!`, {
+          theme: "dark",
+          hideProgressBar: true,
+          autoClose: 2000,
+        });
+      } else {
+        toast.info("Clicked outside known polygons.", {
           theme: "dark",
           hideProgressBar: true,
           autoClose: 2000,
         });
       }
-      return;
-    }
 
-    addGeoJSONToMap(geoJSONData);
-    toast.success("GeoJSON layer added to the map.", {
-      theme: "dark",
-      hideProgressBar: true,
-      autoClose: 2000,
+      setIsLoading(false);
+    };
+
+    map.on('singleclick', handleMapClick);
+
+    return () => {
+      map.un('singleclick', handleMapClick);
+    };
+  }, [classGeoData, selectedExtent, currentImages]);
+
+  const highlightPolygonFeature = (feature: GeoJSON.Feature<GeoJSON.Geometry>) => {
+    const map = mapObjRef.current;
+    if (!map) return;
+
+    // Remove old highlight polygon layer if exists
+    const oldLayer = map.getLayers().getArray().find(l => l.get('name') === 'polygonHighlight');
+    if (oldLayer) map.removeLayer(oldLayer);
+
+    const vectorSource = new VectorSource({
+      features: new GeoJSON().readFeatures(feature, {
+        featureProjection: "EPSG:3857",
+      }),
     });
+
+    const highlightStyle = new Style({
+      stroke: new Stroke({
+        color: 'rgba(255,0,0,1)',
+        width: 3,
+      }),
+      fill: new Fill({
+        color: 'rgba(255,0,0,0.2)',
+      }),
+    });
+
+    const highlightLayer = new VectorLayer({
+      source: vectorSource,
+      style: highlightStyle,
+      properties: { name: "polygonHighlight" },
+    });
+
+    map.addLayer(highlightLayer);
   };
 
   return (
     <div className="flex h-full w-full">
       {isLoading && <Loading />}
       <Sidebar
-        onLayerChange={onLayerChange} // Pass the handler directly
-        currentLayer={currentLayer} // Pass the currentLayer state
-        handleSetWMSURL={handleSetWMSURL} // Pass the handler
+        onLayerChange={onLayerChange}
+        currentLayer={currentLayer}
+        handleSetWMSURL={handleSetWMSURL}
         availableLayers={layers}
         handleWMSLayerChange={handleWMSLayerChange}
         handleSatelliteLayerChange={handleSatelliteLayerChange}
@@ -944,8 +786,7 @@ const Map: React.FC = () => {
       />
       <div className="w-full min-h-full relative">
         <button
-          className={`absolute mx-auto my-2 top-2 left-0 right-0 w-fit p-2 z-10 rounded ${rectangleToolActive ? "bg-black " : "bg-black bg-opacity-50"
-            }`}
+          className={`absolute mx-auto my-2 top-2 left-0 right-0 w-fit p-2 z-10 rounded ${rectangleToolActive ? "bg-black " : "bg-black bg-opacity-50"}`}
           onClick={toggleRectangleTool}
         >
           <PiRectangleDashed size={22} />
@@ -956,22 +797,20 @@ const Map: React.FC = () => {
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
-          style={{ position: "relative" }} // Ensure map container is positioned relative
+          style={{ position: "relative" }}
         >
-          {/* Selection Box */}
           <div
             ref={selectionBoxRef}
             style={{
               display: "none",
               position: "absolute",
-              border: "2px dashed #4A90E2", // More visible color
-              backgroundColor: "rgba(74, 144, 226, 0.2)", // Lighter, semi-transparent blue
+              border: "2px dashed #4A90E2",
+              backgroundColor: "rgba(74, 144, 226, 0.2)",
               pointerEvents: "none",
               zIndex: 9999,
             }}
           ></div>
         </div>
-        {/* ShadCN Modal Implementation */}
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent
             className="sm:max-w-3xl max-h-screen overflow-auto"
@@ -1004,9 +843,7 @@ const Map: React.FC = () => {
                     setMaskImage(
                       selected === "all"
                         ? currentImages.segmentedImage
-                        : currentImages.masks[
-                        selected as keyof typeof currentImages.masks
-                        ]
+                        : currentImages.masks[selected as keyof typeof currentImages.masks]
                     );
                   }}
                 >
@@ -1021,7 +858,6 @@ const Map: React.FC = () => {
               </div>
             </DialogHeader>
             <div className="mt-4 relative h-[100%] flex items-center justify-center">
-              {/* Segmentation Overlay */}
               {maskImage && (
                 <img
                   src={maskImage}
@@ -1033,8 +869,6 @@ const Map: React.FC = () => {
                   }}
                 />
               )}
-
-              {/* Original Tile Image */}
               {originalTileImage && (
                 <img
                   src={originalTileImage}
@@ -1045,8 +879,6 @@ const Map: React.FC = () => {
                   }}
                 />
               )}
-
-              {/* Selected Image */}
               {isModalOpen && (
                 <img
                   ref={selectedImageRef}
@@ -1061,7 +893,6 @@ const Map: React.FC = () => {
                 />
               )}
             </div>
-
             <DialogFooter className="mt-4">
               <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
                 Close
@@ -1069,12 +900,9 @@ const Map: React.FC = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
       </div>
     </div>
   );
 };
 
 export default Map;
-
-

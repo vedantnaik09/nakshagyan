@@ -44,6 +44,7 @@
     "@react-three/fiber": "^8.15.19",
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-backend-webgl": "^4.22.0",
+    "@turf/boolean-point-in-polygon": "^7.1.0",
     "@turf/turf": "^7.1.0",
     "@types/node": "20.6.2",
     "@types/react": "18.2.22",
