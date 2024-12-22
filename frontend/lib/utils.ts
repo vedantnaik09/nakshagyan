@@ -104,7 +104,7 @@ export function createMaskTensor(
   const maskArray = tensorArray[0]; // Remove batch dimension
 
   const waterMask = maskArray.map((row) => row.map((value) => value === targetClass ? 1 : 0));
-  downloadGeoJSONFromMask(waterMask, topLeft, bottomRight, title);
+  saveGeoJSONToIndexedDB(waterMask, topLeft, bottomRight, title);
 
   // Iterate over the tensor and draw the target class with the specified color
   for (let y = 0; y < height; y++) {
@@ -191,7 +191,7 @@ export function createMaskTensor(
 //   URL.revokeObjectURL(url);
 // }
 
-export async function downloadGeoJSONFromMask(
+export async function saveGeoJSONToIndexedDB(
   mask: number[][],
   topLeft: { lat: number; lon: number },
   bottomRight: { lat: number; lon: number },
@@ -228,25 +228,45 @@ export async function downloadGeoJSONFromMask(
   const geoJSON = turf.featureCollection(features);
   const geoJSONString = JSON.stringify(geoJSON, null, 2);
 
-  // Send the GeoJSON data to the API route for saving on the server
   try {
-    const response = await fetch('/api/geojson', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ geoJSONString, title }),
-    });
+    const dbName = "geojsonDB";
+    const storeName = "geojsonStore";
 
-    if (!response.ok) {
-      throw new Error('Failed to save GeoJSON');
-    }
+    // Open a connection to the IndexedDB
+    const request = indexedDB.open(dbName, 1);
 
-    console.log('GeoJSON saved successfully!');
+    request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.createObjectStore(storeName, { keyPath: "title" });
+      }
+    };
+
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction(storeName, "readwrite");
+      const store = transaction.objectStore(storeName);
+
+      // Save the GeoJSON data
+      store.put({ title, geoJSON: geoJSONString });
+
+      transaction.oncomplete = () => {
+        console.log(`GeoJSON saved successfully in IndexedDB under title: "${title}"`);
+      };
+
+      transaction.onerror = (e) => {
+        console.error("Error saving GeoJSON to IndexedDB:", e);
+      };
+    };
+
+    request.onerror = (e) => {
+      console.error("Error opening IndexedDB:", e);
+    };
   } catch (error) {
-    console.error('Error saving GeoJSON:', error);
+    console.error("Error saving GeoJSON:", error);
   }
 }
+
 
 
 

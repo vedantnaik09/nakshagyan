@@ -1,6 +1,7 @@
 // Map.tsx
 "use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { openDB } from "idb"; // Ensure idb is installed and imported
 import { toast } from "react-toastify";
 import { Map as OlMap, View } from "ol";
 import TileLayer from "ol/layer/Tile";
@@ -259,7 +260,7 @@ const Map: React.FC = () => {
     }
   }, []);
 
-  const handleSegmentedImageReady = (images: SegmentedImages) => {
+  const handleSegmentedImageReady = async (images: SegmentedImages) => {
     const { segmentedImage, masks } = images;
     if (segmentedImage && masks.water) {
       setCurrentImages(images);
@@ -284,6 +285,51 @@ const Map: React.FC = () => {
       console.error("No segmented image or mask found.");
       setIsLoading(false);
       toast.error("Segmentation failed");
+    }
+    try {
+      // Open the IndexedDB database
+      const db = await openDB("geojsonDB", 1);
+  
+      // Iterate over all classes and fetch GeoJSON data from IndexedDB
+      for (const cls of classes) {
+        if (!classGeoData[cls]) {
+          try {
+            // Open the IndexedDB database
+            const db = await openDB("geojsonDB", 1);
+          
+            // Iterate over all classes and fetch GeoJSON data from IndexedDB
+            for (const cls of classes) {
+              if (!classGeoData[cls]) {
+                try {
+                  const data = await db.get("geojsonStore", cls);
+          
+                  if (data && data.geoJSON) {
+                    console.log(cls, "Data is", data);
+          
+                    // Parse the geoJSON string into a JSON object
+                    const parsedGeoJSON = JSON.parse(data.geoJSON);
+          
+                    // Use functional state update to correctly accumulate class data
+                    setClassGeoData((prev) => ({
+                      ...prev,
+                      [cls]: parsedGeoJSON, // Store the parsed GeoJSON
+                    }));
+                  } else {
+                    console.error(`GeoJSON data for class "${cls}" not found in IndexedDB.`);
+                  }
+                } catch (error) {
+                  console.error(`Error loading GeoJSON data for class "${cls}":`, error);
+                }
+              }
+            }
+          } catch (error) {
+            console.error("Error opening IndexedDB:", error);
+          }
+          
+        }
+      }
+    } catch (error) {
+      console.error("Error opening IndexedDB:", error);
     }
   };
 
@@ -560,13 +606,21 @@ const Map: React.FC = () => {
 
   const fetchGeoJSON = async (filename: string) => {
     try {
-      const response = await fetch("/data/" + filename + ".geojson");
-      if (!response.ok) throw new Error("Failed to fetch GeoJSON data.");
-      const data: GeoJSON.GeoJSON = await response.json();
+      // Open the IndexedDB database
+      const db = await openDB("geojsonDB", 1);
+  
+      // Fetch the GeoJSON data from the object store
+      const data: GeoJSON.GeoJSON | null = await db.get("geojsonStore", filename);
+  
+      if (!data) {
+        throw new Error(`GeoJSON data for ${filename} not found in IndexedDB.`);
+      }
+  
+      // Update the state with the fetched data
       setGeoJSONData(data);
     } catch (error) {
-      console.error("Error fetching GeoJSON:", error);
-      toast.error("Failed to load GeoJSON data.", {
+      console.error("Error fetching GeoJSON from IndexedDB:", error);
+      toast.error("Failed to load GeoJSON data from IndexedDB.", {
         theme: "dark",
         hideProgressBar: true,
         autoClose: 2000,
@@ -652,26 +706,6 @@ const Map: React.FC = () => {
     };
   }, [wmsURL, wmsLayer]);
 
-  // Preload geojson data for each class once
-  useEffect(() => {
-    const loadAllClassGeoData = async () => {
-      for (const cls of classes) {
-        if (!classGeoData[cls]) {
-          try {
-            const response = await fetch(`/data/${cls}.geojson`);
-            if (response.ok) {
-              const data = await response.json();
-              setClassGeoData((prev) => ({ ...prev, [cls]: data }));
-            }
-          } catch (err) {
-            console.error(`Error loading ${cls}.geojson`, err);
-          }
-        }
-      }
-    };
-    loadAllClassGeoData();
-  }, []);
-
   // On map click - check which polygon the point falls into
   useEffect(() => {
     const map = mapObjRef.current;
@@ -722,6 +756,8 @@ const Map: React.FC = () => {
           autoClose: 2000,
         });
       } else {
+        console.log("CLass geo data is ",classGeoData)
+
         toast.info("Clicked outside known polygons.", {
           theme: "dark",
           hideProgressBar: true,

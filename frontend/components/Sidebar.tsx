@@ -3,6 +3,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { openDB } from "idb"; // Ensure idb is installed and imported
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -141,6 +142,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ] as const;
 
+  const downloadGeoJson = async (layerId: string) =>{
+    try {
+      // Open the IndexedDB database
+      const db = await openDB("geojsonDB", 1);
+
+      // Retrieve the GeoJSON data for the layer
+      const data = await db.get("geojsonStore", layerId);
+
+      if (data && data.geoJSON) {
+        // Parse the GeoJSON string to ensure it is valid
+        const geoJSON = JSON.parse(data.geoJSON);
+
+        // Create a Blob from the GeoJSON data
+        const blob = new Blob([JSON.stringify(geoJSON, null, 2)], {
+          type: "application/json",
+        });
+
+        // Create a temporary download link
+        const downloadLink = document.createElement("a");
+        downloadLink.href = URL.createObjectURL(blob);
+        downloadLink.download = `${layerId}.geojson`;
+
+        // Trigger the download
+        downloadLink.click();
+
+        // Clean up the temporary URL object
+        URL.revokeObjectURL(downloadLink.href);
+      } else {
+        console.error(`GeoJSON data for layer "${layerId}" not found in IndexedDB.`);
+      }
+    } catch (error) {
+      console.error("Error downloading GeoJSON from IndexedDB:", error);
+    }
+  
+  }
   return (
     <div
       className={cn(
@@ -206,13 +242,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        // Trigger download of the GeoJSON file
-                        const downloadLink = document.createElement("a");
-                        downloadLink.href = `/data/${layer.id}.geojson`;
-                        downloadLink.download = `${layer.id}.geojson`;
-                        downloadLink.click();
-                      }}
+                      onClick={() => downloadGeoJson(layer.id)}
                       title={`Download ${layer.name} GeoJSON`}
                       className="ml-2 flex-shrink-0"
                     >
