@@ -437,11 +437,11 @@ export const applyONNXSegmentation = async (
     // saveTensorToFile(segmentation.dataSync(), "output_Tensor_tf");
 
     // Generate mask images for different classes with RGBA
-    const maskTensorBase64Water = createMaskTensor(segmentation, 0, 'rgba(41, 169, 226, 1)', topLeft, bottomRight, 'water');
-    const maskTensorBase64Land = createMaskTensor(segmentation, 1, 'rgba(246, 41, 132, 1)', topLeft, bottomRight, 'land');
-    const maskTensorBase64Vegetation = createMaskTensor(segmentation, 2, 'rgba(228, 193, 110, 1)', topLeft, bottomRight, 'vegetation');
-    const maskTensorBase64Road = createMaskTensor(segmentation, 3, 'rgba(152, 16, 60, 1)', topLeft, bottomRight, 'road');
-    const maskTensorBase64Building = createMaskTensor(segmentation, 4, 'rgba(58, 221, 254, 1)', topLeft, bottomRight, 'building');
+    const maskTensorBase64Water = await createMaskTensor(segmentation, 0, 'rgba(41, 169, 226, 1)', topLeft, bottomRight, 'water');
+    const maskTensorBase64Land = await createMaskTensor(segmentation, 1, 'rgba(246, 41, 132, 1)', topLeft, bottomRight, 'land');
+    const maskTensorBase64Vegetation = await createMaskTensor(segmentation, 2, 'rgba(228, 193, 110, 1)', topLeft, bottomRight, 'vegetation');
+    const maskTensorBase64Road = await createMaskTensor(segmentation, 3, 'rgba(152, 16, 60, 1)', topLeft, bottomRight, 'road');
+    const maskTensorBase64Building = await createMaskTensor(segmentation, 4, 'rgba(58, 221, 254, 1)', topLeft, bottomRight, 'building');
 
     localStorage.setItem("base64", JSON.stringify({
       "water": maskTensorBase64Water,
