@@ -756,8 +756,6 @@ const Map: React.FC = () => {
           autoClose: 2000,
         });
       } else {
-        console.log("CLass geo data is ",classGeoData)
-
         toast.info("Clicked outside known polygons.", {
           theme: "dark",
           hideProgressBar: true,
