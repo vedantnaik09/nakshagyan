@@ -294,19 +294,38 @@ const Map: React.FC = () => {
       for (const cls of classes) {
         if (!classGeoData[cls]) {
           try {
-            const data = await db.get("geojsonStore", cls);
-            
-            if (data) {
-              // Update the state with the fetched data
-              console.log(cls, "Data is ",data)
-              setClassGeoData((prev) => ({ ...prev, [cls]: data }));
-              console.log("Set the geojson data to after segmentation ",classGeoData)
-            } else {
-              console.error(`GeoJSON data for class "${cls}" not found in IndexedDB.`);
+            // Open the IndexedDB database
+            const db = await openDB("geojsonDB", 1);
+          
+            // Iterate over all classes and fetch GeoJSON data from IndexedDB
+            for (const cls of classes) {
+              if (!classGeoData[cls]) {
+                try {
+                  const data = await db.get("geojsonStore", cls);
+          
+                  if (data && data.geoJSON) {
+                    console.log(cls, "Data is", data);
+          
+                    // Parse the geoJSON string into a JSON object
+                    const parsedGeoJSON = JSON.parse(data.geoJSON);
+          
+                    // Use functional state update to correctly accumulate class data
+                    setClassGeoData((prev) => ({
+                      ...prev,
+                      [cls]: parsedGeoJSON, // Store the parsed GeoJSON
+                    }));
+                  } else {
+                    console.error(`GeoJSON data for class "${cls}" not found in IndexedDB.`);
+                  }
+                } catch (error) {
+                  console.error(`Error loading GeoJSON data for class "${cls}":`, error);
+                }
+              }
             }
           } catch (error) {
-            console.error(`Error loading GeoJSON data for class "${cls}":`, error);
+            console.error("Error opening IndexedDB:", error);
           }
+          
         }
       }
     } catch (error) {
