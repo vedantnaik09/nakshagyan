@@ -314,6 +314,7 @@ const Map: React.FC = () => {
                       ...prev,
                       [cls]: parsedGeoJSON, // Store the parsed GeoJSON
                     }));
+                    console.log("THe geojson data is ",classGeoData)
                   } else {
                     console.error(`GeoJSON data for class "${cls}" not found in IndexedDB.`);
                   }
@@ -357,11 +358,11 @@ const Map: React.FC = () => {
     try {
       await fetchGeoJSON(type);
       if (geoJSONData) {
-        addGeoJSONToMap(geoJSONData);
+        await addGeoJSONToMap(geoJSONData);
         const mapLayers = map.getLayers().getArray();
         const addedLayer = mapLayers[mapLayers.length - 1];
         if (addedLayer instanceof VectorLayer) {
-          addedLayer.set("name", `${type}Layer`);
+          addedLayer.set("name", `geoJSONLayer`);
         }
       }
     } catch (error) {
@@ -610,14 +611,14 @@ const Map: React.FC = () => {
       const db = await openDB("geojsonDB", 1);
   
       // Fetch the GeoJSON data from the object store
-      const data: GeoJSON.GeoJSON | null = await db.get("geojsonStore", filename);
+      const data = await db.get("geojsonStore", filename);
   
       if (!data) {
         throw new Error(`GeoJSON data for ${filename} not found in IndexedDB.`);
       }
   
       // Update the state with the fetched data
-      setGeoJSONData(data);
+      await setGeoJSONData(data.geoJSON);
     } catch (error) {
       console.error("Error fetching GeoJSON from IndexedDB:", error);
       toast.error("Failed to load GeoJSON data from IndexedDB.", {
@@ -628,7 +629,7 @@ const Map: React.FC = () => {
     }
   };
 
-  const addGeoJSONToMap = (geojson: GeoJSON.GeoJSON) => {
+  const addGeoJSONToMap = async (geojson: GeoJSON.GeoJSON) => {
     const map = mapObjRef.current;
     if (!map) {
       console.error("Map instance not available.");
@@ -636,6 +637,7 @@ const Map: React.FC = () => {
     }
 
     const existingLayers = map.getLayers().getArray();
+    console.log("Existing layers are ",existingLayers)
     existingLayers.forEach((layer) => {
       if (layer instanceof VectorLayer && layer.get("name") === "geoJSONLayer") {
         map.removeLayer(layer);
@@ -663,7 +665,7 @@ const Map: React.FC = () => {
       style: vectorStyle,
     });
     vectorLayer.set("name", "geoJSONLayer");
-    map.addLayer(vectorLayer);
+    await map.addLayer(vectorLayer);
   };
 
   useEffect(() => {
