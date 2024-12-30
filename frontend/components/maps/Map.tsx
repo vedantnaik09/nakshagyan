@@ -13,23 +13,16 @@ import "ol/ol.css";
 import { PiRectangleDashed } from "react-icons/pi";
 import { Sidebar } from "../Sidebar";
 import { epsg4326toEpsg3857 } from "../../lib/utils";
-import Loading from '@/components/Loading/Loading';
+import Loading from "@/components/Loading/Loading";
 
 import { GeoJSON } from "ol/format";
 import VectorSource from "ol/source/Vector";
 import VectorLayer from "ol/layer/Vector";
 import { Fill, Stroke, Style } from "ol/style";
 import { applyONNXSegmentation, colorDictRgb } from "../model/Model";
-import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
+import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { uploadImagesForRun } from "@/lib/uploadImages";
 import { Feature } from "ol";
@@ -49,9 +42,7 @@ type SegmentedImages = {
 
 const Map: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [wmsURL, setWMSURL] = useState<string>(
-    `https://services.sentinel-hub.com/ogc/wms/${process.env.NEXT_PUBLIC_SENTINEL_INSTANCE_ID}?`
-  );
+  const [wmsURL, setWMSURL] = useState<string>(`https://services.sentinel-hub.com/ogc/wms/${process.env.NEXT_PUBLIC_SENTINEL_INSTANCE_ID}?`);
   const [wmsLayer, setWMSLayer] = useState<string>("1_TRUE-COLOR-L1C");
   const [satelliteLayer, setSatelliteLayer] = useState<string>("1_TRUE-COLOR-L1C");
   const satelliteLayerRef = useRef<string>("1_TRUE-COLOR-L1C");
@@ -289,32 +280,32 @@ const Map: React.FC = () => {
     try {
       // Open the IndexedDB database
       const db = await openDB("geojsonDB", 1);
-  
+
       // Iterate over all classes and fetch GeoJSON data from IndexedDB
       for (const cls of classes) {
         if (!classGeoData[cls]) {
           try {
             // Open the IndexedDB database
             const db = await openDB("geojsonDB", 1);
-          
+
             // Iterate over all classes and fetch GeoJSON data from IndexedDB
             for (const cls of classes) {
               if (!classGeoData[cls]) {
                 try {
                   const data = await db.get("geojsonStore", cls);
-          
+
                   if (data && data.geoJSON) {
                     console.log(cls, "Data is", data);
-          
+
                     // Parse the geoJSON string into a JSON object
                     const parsedGeoJSON = JSON.parse(data.geoJSON);
-          
+
                     // Use functional state update to correctly accumulate class data
                     setClassGeoData((prev) => ({
                       ...prev,
                       [cls]: parsedGeoJSON, // Store the parsed GeoJSON
                     }));
-                    console.log("THe geojson data is ",classGeoData)
+                    console.log("THe geojson data is ", classGeoData);
                   } else {
                     console.error(`GeoJSON data for class "${cls}" not found in IndexedDB.`);
                   }
@@ -326,7 +317,6 @@ const Map: React.FC = () => {
           } catch (error) {
             console.error("Error opening IndexedDB:", error);
           }
-          
         }
       }
     } catch (error) {
@@ -334,9 +324,7 @@ const Map: React.FC = () => {
     }
   };
 
-  const onLayerChange = async (
-    type: "water" | "vegetation" | "road" | "land" | "building" | "none" | "all"
-  ) => {
+  const onLayerChange = async (type: "water" | "vegetation" | "road" | "land" | "building" | "none" | "all") => {
     setCurrentLayer(type);
     const map = mapObjRef.current;
     if (!map) return;
@@ -344,29 +332,30 @@ const Map: React.FC = () => {
     const layersToRemove = map
       .getLayers()
       .getArray()
-      .filter((layer) =>
-        ["water", "vegetation", "road", "land", "building"].includes(
-          layer.get("name")
-        )
-      );
+      .filter((layer) => ["water", "vegetation", "road", "land", "building"].includes(layer.get("name")));
     layersToRemove.forEach((layer) => map.removeLayer(layer));
 
     if (type === "none") {
-      return;
-    }
-
-    try {
-      await fetchGeoJSON(type);
-      if (geoJSONData) {
-        await addGeoJSONToMap(geoJSONData);
-        const mapLayers = map.getLayers().getArray();
-        const addedLayer = mapLayers[mapLayers.length - 1];
-        if (addedLayer instanceof VectorLayer) {
-          addedLayer.set("name", `geoJSONLayer`);
+      const existingLayers = map.getLayers().getArray();
+      existingLayers.forEach((layer) => {
+        if (layer instanceof VectorLayer && layer.get("name") === "geoJSONLayer") {
+          map.removeLayer(layer);
         }
+      });
+    } else {
+      try {
+        await fetchGeoJSON(type);
+        if (geoJSONData) {
+          await addGeoJSONToMap(geoJSONData);
+          const mapLayers = map.getLayers().getArray();
+          const addedLayer = mapLayers[mapLayers.length - 1];
+          if (addedLayer instanceof VectorLayer) {
+            addedLayer.set("name", `geoJSONLayer`);
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to fetch or add layer for ${type}:`, error);
       }
-    } catch (error) {
-      console.error(`Failed to fetch or add layer for ${type}:`, error);
     }
   };
 
@@ -377,9 +366,7 @@ const Map: React.FC = () => {
       const sentinelWMSLayer = map
         .getLayers()
         .getArray()
-        .find((layerObj) => layerObj.get("name") === "sentinelWMSLayer") as
-        | TileLayer<TileWMS>
-        | undefined;
+        .find((layerObj) => layerObj.get("name") === "sentinelWMSLayer") as TileLayer<TileWMS> | undefined;
 
       if (sentinelWMSLayer) {
         const source = sentinelWMSLayer.getSource();
@@ -398,9 +385,7 @@ const Map: React.FC = () => {
       const sentinelWMSLayer = map
         .getLayers()
         .getArray()
-        .find((layerObj) => layerObj.get("name") === "sentinelWMSLayer") as
-        | TileLayer<TileWMS>
-        | undefined;
+        .find((layerObj) => layerObj.get("name") === "sentinelWMSLayer") as TileLayer<TileWMS> | undefined;
 
       if (sentinelWMSLayer) {
         sentinelWMSLayer.getSource()?.updateParams({ LAYERS: layer });
@@ -499,14 +484,13 @@ const Map: React.FC = () => {
     const [minX, maxY] = rectTopLeft;
     const [maxX, minY] = rectBottomRight;
 
-    const transformedExtent = transformExtent(
-      [minX, minY, maxX, maxY],
-      "EPSG:3857",
-      "EPSG:4326"
-    );
+    const transformedExtent = transformExtent([minX, minY, maxX, maxY], "EPSG:3857", "EPSG:4326");
     const [wMinX, wMinY, wMaxX, wMaxY] = transformedExtent;
     const topLeft = { lat: wMaxY, lon: wMinX };
-    const bottomRight = { lat: wMinY, lon: wMaxX };
+    const bottomRight = {
+      lat: wMinY,
+      lon: wMaxX,
+    };
 
     setSelectedExtent([wMinX, wMinY, wMaxX, wMaxY]);
 
@@ -524,11 +508,11 @@ const Map: React.FC = () => {
     });
     const polygonStyle = new Style({
       stroke: new Stroke({
-        color: 'rgba(255, 255, 0, 1)',
+        color: "rgba(255, 255, 0, 1)",
         width: 2,
       }),
       fill: new Fill({
-        color: 'rgba(255, 255, 0, 0.2)',
+        color: "rgba(255, 255, 0, 0.2)",
       }),
     });
     const polygonSource = new VectorSource({
@@ -540,7 +524,10 @@ const Map: React.FC = () => {
       properties: { name: "selectionPolygon" },
     });
 
-    const oldLayer = map.getLayers().getArray().find(l => l.get('name') === 'selectionPolygon');
+    const oldLayer = map
+      .getLayers()
+      .getArray()
+      .find((l) => l.get("name") === "selectionPolygon");
     if (oldLayer) map.removeLayer(oldLayer);
     map.addLayer(polygonLayer);
 
@@ -566,8 +553,7 @@ const Map: React.FC = () => {
 
     try {
       const response = await fetch(tileURL);
-      if (!response.ok)
-        throw new Error(`Failed to fetch tile image: ${response.statusText}`);
+      if (!response.ok) throw new Error(`Failed to fetch tile image: ${response.statusText}`);
 
       const blob = await response.blob();
       const objectURL = URL.createObjectURL(blob);
@@ -580,15 +566,7 @@ const Map: React.FC = () => {
       const image = new Image();
       image.src = objectURL;
       image.onload = () => {
-        applyONNXSegmentation(
-          "/models/model.onnx",
-          image,
-          handleSegmentedImageReady,
-          document.createElement("canvas"),
-          folderName,
-          topLeft,
-          bottomRight
-        );
+        applyONNXSegmentation("/models/model.onnx", image, handleSegmentedImageReady, document.createElement("canvas"), folderName, topLeft, bottomRight);
       };
     } catch (error) {
       console.error("Error fetching tile:", error);
@@ -607,17 +585,14 @@ const Map: React.FC = () => {
 
   const fetchGeoJSON = async (filename: string) => {
     try {
-      // Open the IndexedDB database
       const db = await openDB("geojsonDB", 1);
-  
-      // Fetch the GeoJSON data from the object store
       const data = await db.get("geojsonStore", filename);
-  
+
       if (!data) {
         throw new Error(`GeoJSON data for ${filename} not found in IndexedDB.`);
       }
-  
-      // Update the state with the fetched data
+
+      // Wait for the state to update before proceeding
       await setGeoJSONData(data.geoJSON);
     } catch (error) {
       console.error("Error fetching GeoJSON from IndexedDB:", error);
@@ -629,6 +604,13 @@ const Map: React.FC = () => {
     }
   };
 
+  // Trigger layer update when geoJSONData changes
+  useEffect(() => {
+    if (geoJSONData) {
+      addGeoJSONToMap(geoJSONData);
+    }
+  }, [geoJSONData]);
+
   const addGeoJSONToMap = async (geojson: GeoJSON.GeoJSON) => {
     const map = mapObjRef.current;
     if (!map) {
@@ -637,7 +619,7 @@ const Map: React.FC = () => {
     }
 
     const existingLayers = map.getLayers().getArray();
-    console.log("Existing layers are ",existingLayers)
+    console.log("Existing layers are ", existingLayers);
     existingLayers.forEach((layer) => {
       if (layer instanceof VectorLayer && layer.get("name") === "geoJSONLayer") {
         map.removeLayer(layer);
@@ -685,7 +667,9 @@ const Map: React.FC = () => {
             serverType: "geoserver",
             crossOrigin: "anonymous",
           }),
-          properties: { name: "sentinelWMSLayer" },
+          properties: {
+            name: "sentinelWMSLayer",
+          },
         }),
       ],
       view: new View({
@@ -716,7 +700,7 @@ const Map: React.FC = () => {
     const handleMapClick = async (evt: any) => {
       setIsLoading(true);
 
-      const coordinate4326 = transform(evt.coordinate, 'EPSG:3857', 'EPSG:4326');
+      const coordinate4326 = transform(evt.coordinate, "EPSG:3857", "EPSG:4326");
       if (!coordinate4326) {
         setIsLoading(false);
         return;
@@ -768,10 +752,10 @@ const Map: React.FC = () => {
       setIsLoading(false);
     };
 
-    map.on('singleclick', handleMapClick);
+    map.on("singleclick", handleMapClick);
 
     return () => {
-      map.un('singleclick', handleMapClick);
+      map.un("singleclick", handleMapClick);
     };
   }, [classGeoData, selectedExtent, currentImages]);
 
@@ -780,7 +764,10 @@ const Map: React.FC = () => {
     if (!map) return;
 
     // Remove old highlight polygon layer if exists
-    const oldLayer = map.getLayers().getArray().find(l => l.get('name') === 'polygonHighlight');
+    const oldLayer = map
+      .getLayers()
+      .getArray()
+      .find((l) => l.get("name") === "polygonHighlight");
     if (oldLayer) map.removeLayer(oldLayer);
 
     const vectorSource = new VectorSource({
@@ -791,11 +778,11 @@ const Map: React.FC = () => {
 
     const highlightStyle = new Style({
       stroke: new Stroke({
-        color: 'rgba(255,0,0,1)',
+        color: "rgba(255,0,0,1)",
         width: 3,
       }),
       fill: new Fill({
-        color: 'rgba(255,0,0,0.2)',
+        color: "rgba(255,0,0,0.2)",
       }),
     });
 
@@ -827,14 +814,7 @@ const Map: React.FC = () => {
         >
           <PiRectangleDashed size={22} />
         </button>
-        <div
-          ref={mapRef}
-          className="w-full h-full"
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp}
-          style={{ position: "relative" }}
-        >
+        <div ref={mapRef} className="w-full h-full" onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} style={{ position: "relative" }}>
           <div
             ref={selectionBoxRef}
             style={{
@@ -848,23 +828,14 @@ const Map: React.FC = () => {
           ></div>
         </div>
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogContent
-            className="sm:max-w-3xl max-h-screen overflow-auto"
-            key={modalReload ? "reload" : "no-reload"}
-          >
+          <DialogContent className="sm:max-w-3xl max-h-screen overflow-auto" key={modalReload ? "reload" : "no-reload"}>
             <DialogHeader className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center">
               <div>
                 <DialogTitle>Selected Area</DialogTitle>
-                <DialogDescription>
-                  Review the selected area and highlight specific features by clicking
-                  on them.
-                </DialogDescription>
+                <DialogDescription>Review the selected area and highlight specific features by clicking on them.</DialogDescription>
               </div>
               <div className="mt-4 sm:mt-0 w-full sm:w-auto">
-                <label
-                  htmlFor="layer-select"
-                  className="block text-sm font-medium text-gray-700"
-                >
+                <label htmlFor="layer-select" className="block text-sm font-medium text-gray-700">
                   Select Layer:
                 </label>
                 <select
@@ -873,14 +844,8 @@ const Map: React.FC = () => {
                   value={currentLayer}
                   onChange={(e) => {
                     const selected = e.target.value;
-                    setCurrentLayer(
-                      selected as "water" | "vegetation" | "road" | "land" | "building" | "none" | "all"
-                    );
-                    setMaskImage(
-                      selected === "all"
-                        ? currentImages.segmentedImage
-                        : currentImages.masks[selected as keyof typeof currentImages.masks]
-                    );
+                    setCurrentLayer(selected as "water" | "vegetation" | "road" | "land" | "building" | "none" | "all");
+                    setMaskImage(selected === "all" ? currentImages.segmentedImage : currentImages.masks[selected as keyof typeof currentImages.masks]);
                   }}
                 >
                   <option value="none">None</option>
