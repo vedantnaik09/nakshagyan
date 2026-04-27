@@ -9,7 +9,6 @@ import ImageLayer from "ol/layer/Image";
 import TileWMS from "ol/source/TileWMS";
 import ImageStatic from "ol/source/ImageStatic";
 import { transformExtent, transform } from "ol/proj";
-import "ol/ol.css";
 import { PiRectangleDashed } from "react-icons/pi";
 import { Sidebar } from "../Sidebar";
 import { epsg4326toEpsg3857 } from "../../lib/utils";
@@ -42,10 +41,10 @@ type SegmentedImages = {
 
 const Map: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [wmsURL, setWMSURL] = useState<string>(`https://services.sentinel-hub.com/ogc/wms/${process.env.NEXT_PUBLIC_SENTINEL_INSTANCE_ID}?`);
-  const [wmsLayer, setWMSLayer] = useState<string>("1_TRUE-COLOR-L1C");
-  const [satelliteLayer, setSatelliteLayer] = useState<string>("1_TRUE-COLOR-L1C");
-  const satelliteLayerRef = useRef<string>("1_TRUE-COLOR-L1C");
+  const [wmsURL, setWMSURL] = useState<string>(`https://tiles.maps.eox.at/?`);
+  const [wmsLayer, setWMSLayer] = useState<string>("s2cloudless-2022_3857");
+  const [satelliteLayer, setSatelliteLayer] = useState<string>("s2cloudless-2022_3857");
+  const satelliteLayerRef = useRef<string>("s2cloudless-2022_3857");
   const [layers, setLayers] = useState<string[]>([]);
   const [rectangleToolActive, setRectangleToolActive] = useState<boolean>(false);
   const [modalReload, setModalReload] = useState(false);
@@ -494,6 +493,9 @@ const Map: React.FC = () => {
 
     setSelectedExtent([wMinX, wMinY, wMaxX, wMaxY]);
 
+    // prepare bbox in map projection (EPSG:3857) for WMS GetMap
+    const bbox3857 = `${minX},${minY},${maxX},${maxY}`;
+
     const polygonCoordinates = [
       [
         [wMinX, wMaxY],
@@ -540,10 +542,10 @@ const Map: React.FC = () => {
       request: "GetMap",
       layers: satelliteLayerRef.current,
       styles: "",
-      bbox: `${wMinX},${wMinY},${wMaxX},${wMaxY}`,
+      bbox: bbox3857,
       width: width.toString(),
       height: height.toString(),
-      srs: "EPSG:4326",
+      srs: "EPSG:3857",
       format: "image/png",
       transparent: "true",
     });
@@ -805,6 +807,8 @@ const Map: React.FC = () => {
         availableLayers={layers}
         handleWMSLayerChange={handleWMSLayerChange}
         handleSatelliteLayerChange={handleSatelliteLayerChange}
+        initialWMSLayer={wmsLayer}
+        initialSatelliteLayer={satelliteLayer}
         onSetCoordinates={handleSetCoordinates}
       />
       <div className="w-full min-h-full relative">

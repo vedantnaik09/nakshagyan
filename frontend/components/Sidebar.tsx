@@ -12,6 +12,7 @@ import {
   Home,        // Updated Icon for Building Areas
   MapPin,      // Updated Icon for Land Areas
   Globe2,
+  AlertTriangle,
   Satellite,
   ChevronLeft,
   ChevronRight,
@@ -50,6 +51,8 @@ interface SidebarProps {
   handleWMSLayerChange: (layer: string) => void;
   handleSatelliteLayerChange: (layer: string) => void;
   onSetCoordinates: (coordinates: { lat: number; lon: number }) => void;
+  initialWMSLayer?: string | null;
+  initialSatelliteLayer?: string | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -60,14 +63,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
   handleWMSLayerChange,
   handleSatelliteLayerChange,
   onSetCoordinates,
+  initialWMSLayer = null,
+  initialSatelliteLayer = null,
 }) => {
   const [loading, setLoading] = useState(false);
   const [latitude, setLatitude] = useState<string>("");
   const [longitude, setLongitude] = useState<string>("");
-  const [activeWMSLayer, setActiveWMSLayer] = useState<string | null>(null);
-  const [activeSatelliteLayer, setActiveSatelliteLayer] = useState<string | null>(
-    null
+  const [activeWMSLayer, setActiveWMSLayer] = useState<string | null>(
+    initialWMSLayer || null
   );
+  const [activeSatelliteLayer, setActiveSatelliteLayer] = useState<string | null>(
+    initialSatelliteLayer || null
+  );
+
+  useEffect(() => {
+    setActiveWMSLayer(initialWMSLayer || null);
+  }, [initialWMSLayer]);
+
+  useEffect(() => {
+    setActiveSatelliteLayer(initialSatelliteLayer || null);
+  }, [initialSatelliteLayer]);
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false); // State for collapse
 
   useEffect(() => {
@@ -198,6 +213,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {isCollapsed ? <ChevronRight /> : <ChevronLeft />}
         </Button>
       </div>
+
+      {/* Small disclaimer about segmentation accuracy */}
+      {!isCollapsed && (
+        <div className="p-3 border-b border-border bg-muted text-sm flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-yellow-500 mt-1" />
+          <div>
+            <strong>Disclaimer:</strong> The segmentation model was trained on a different dataset, so results may not be fully accurate for your imagery.
+          </div>
+        </div>
+      )}
 
       {/* Main Content with Unified Scrolling */}
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-primary scrollbar-track-background p-4">
