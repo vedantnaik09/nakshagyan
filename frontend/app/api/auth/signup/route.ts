@@ -4,12 +4,14 @@ import { NextRequest, NextResponse } from "next/server";
 import bcryptjs from "bcryptjs";
 import { sendEmail } from "../../../../helpers/mailer";
 
-
-connect()
-
+let isConnected = false
 
 export async function POST(request: NextRequest){
     try {
+        if (!isConnected) {
+            await connect()
+            isConnected = true
+        }
         const reqBody = await request.json()
         const {username, email, password} = reqBody
 
